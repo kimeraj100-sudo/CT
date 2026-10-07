@@ -1,0 +1,50 @@
+name: Build CT Team APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+
+      - name: Assemble project from piece-XX zip files
+        run: |
+          set -e
+          ls piece-*.zip
+          rm -rf build_project
+          mkdir build_project
+          for z in $(ls piece-*.zip | sort); do
+            echo "Unpacking $z"
+            unzip -o -q "$z" -d build_project
+          done
+          echo "--- project root ---"
+          ls build_project
+
+      - name: Build debug APK
+        working-directory: build_project
+        run: gradle assembleDebug --stacktrace --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CT-Team-APK
+          path: build_project/app/build/outputs/apk/debug/*.apk
