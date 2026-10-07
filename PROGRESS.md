@@ -21,9 +21,9 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 ## STATUS
 | # | Piece | Status |
 |---|-------|--------|
-| 1 | Foundation: build, icon, theme, animated splash, role select | DONE (first build not yet confirmed — check Actions) |
-| 2 | Data layer | NEXT |
-| 3 | Manager: workers & tasks | todo |
+| 1 | Foundation: build, icon, theme, animated splash, role select | DONE (build confirmed green) |
+| 2 | Data layer | DONE in piece-02-data.zip (build result: check Actions) |
+| 3 | Manager: workers & tasks | NEXT |
 | 4 | Worker: registration, tasks, submit proof, earnings | todo |
 | 5 | Security & sync (HMAC reports/updates) | todo |
 | 6 | Screenshot verification | todo |
@@ -54,3 +54,22 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 3. Do not restart or simplify the concept; if something can't be done yet, leave the architecture for it.
 4. After each piece: update this file, and ask the user to paste the GitHub Actions error log if the build fails.
 5. Keep honesty in the UI: automated checks flag, the manager decides.
+
+## Piece 2 — Data layer (what exists now)
+Files (package `com.ctteam.app.data`, folder `app/src/main/java/com/ctteam/app/data/`):
+- `Entities.kt` — all Room tables + status constants (`TaskType`, `SubStatus`, `PayoutStatus`, `Verdict`, `Dir`, `NcStatus`). Tables: workers, phone_history, tasks, task_versions, submissions, proofs, payout_requests, payments, nc_statements, nc_rows, nc_claims, support_messages, announcements, learn_content, audit_log, events, meta, manager_identity.
+- `Daos.kt` — one DAO per area (WorkerDao, TaskDao, SubmissionDao, PayoutDao, NcDao, SupportDao, ContentDao, AuditDao, EventDao, MetaDao, ManagerDao). Lists the UI needs come as `Flow`.
+- `CTDatabase.kt` — database `ctteam.db`, version 1, schema export on. `Migrations.ALL` is empty now. RULE: any entity change = version +1 AND a Migration; never destructive migration; never rename the DB.
+- `Util.kt` — `Hashing.sha256Hex`, `TimeUtil` (EAT day key, Monday-start week key, `WEEK_MS`), `PhoneUtil.normalize/parse/networkOf` (0772…, 256772…, +256772… all -> 256772…; MTN prefixes 77,78,76,39; Airtel 70,75,74,20), `NameUtil.key` (case/order/spacing-insensitive name key).
+- `Repositories.kt` — `Outcome.Ok/Err`; `AuditRepository` (hash-chained `log`, `event`, `verifyChain`), `WorkerRepository` (`register`, `changePhone` [once per 7 days, blocked while payout IN_PROGRESS, history kept], `editNames`, `setActive`), `TaskRepository` (`create`, `update` [auto version + task_versions snapshot], `setActive`), `SubmissionRepository` (`availableTasks` [daily renews next EAT day, one-time once], `submit` [stores proofs + per-worker `seq`], `decide` [manager final say], `reassignOneTime`, `screenshotSeenBefore`, `expectedForWeek`), `PayoutRepository` (`request` [week sum, attaches submissions so nothing is counted twice], `confirmPaid` [AUTO_MATCH or MANUAL, PAID is permanent]), `ManagerRepository` (`isSetUp`, `setUp(pin)` only once, `verifyPin`, PBKDF2).
+- `ServiceLocator.kt` — `ServiceLocator.get(context)` returns `Repos` with `.audit .workers .tasks .submissions .payouts .manager .db`.
+- `MainActivity.kt` (replaced) — opens the database in the background and logs `APP_START`.
+- Root `build.gradle.kts` and `app/build.gradle.kts` replaced: added KSP `1.9.24-1.0.20` and Room 2.6.1, versionCode 2 / versionName 0.2.0 (bump versionCode every piece).
+
+Decisions:
+- Money = Long UGX. Times = UTC millis. Day/week keys use EAT (UTC+3); payout weeks Mon–Sun, key = Monday date.
+- National ID length is `WorkerRepository.NIN_LENGTH = 14` (change in one place if needed).
+- Only ONE manager identity can exist (`manager_identity` id=1, PIN). No "create manager" feature exists. Piece 5 adds the manager signing key; workers must trust only updates signed by it. Piece 11 must include it in the encrypted backup.
+- The schema JSON files are generated in CI and not stored in the repo; migrations are still mandatory.
+
+Next: Piece 3 (Manager: setup/PIN screen, dashboard, workers, tasks, review submissions) using `ServiceLocator.get(context)`.
