@@ -24,7 +24,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 1 | Foundation: build, icon, theme, animated splash, role select | DONE (build confirmed green) |
 | 2 | Data layer | DONE |
 | 3 | Manager: PIN, dashboard, workers, tasks, review | DONE in piece-03-manager.zip (build result: check Actions) |
-| 4 | Worker: registration, tasks, submit proof, earnings | todo |
+| 4A | Manager access (20 PINs, code names, main manager) + worker registration/home | DONE in piece-04a-managers-worker.zip (build result: check Actions) |
+| 4B | Worker: task list, submit proof, earnings history, payout request | NEXT |
 | 5 | Security & sync (HMAC reports/updates) | todo |
 | 6 | Screenshot verification | todo |
 | 7 | Payouts, phone/name normalization, statement import | todo |
@@ -38,7 +39,7 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 1. **Foundation** — compiling project, fixed signing key, launcher icon from the approved logo, jewel theme, animated logo opening with gold light-sweep, Manager/Worker choice screen, different transition per button.
 2. **Data layer** — Room database (add KSP plugin, version matching Kotlin 1.9.24, e.g. `1.9.24-1.0.20`) with tables: workers (+ phone history), tasks (+ task versions), submissions, proofs/hashes, payout requests, payments, NC statement rows & claims, support messages, announcements, learn content, audit log, events. Repository classes. Rules: phone change once/week and not during payout in progress. Schema export on, migrations always provided so updates never wipe data.
 3. **Manager: workers & tasks** — dashboard stats, add/edit workers, create/edit/disable tasks (daily vs one-time, pay, example links, proof requirements), approve/reject submissions with audit log.
-4. **Worker** — registration (National ID, names, MTN/Airtel number), task list with daily renewal, proof submission screen, expected weekly earnings, history.
+4. **Worker** — split in two. 4A: multi-manager PIN access + worker registration and home. 4B: task list with daily renewal, proof submission screen, earnings history, payout request.
 5. **Security & sync** — per-worker secret key, HMAC-SHA256 signed reports and updates, task IDs + sequence numbers, replay/duplicate protection, copy/paste and file exchange.
 6. **Screenshot verification** — SHA-256, dHash, size, dimensions, EXIF/editor tags, timestamps, duplicate detection → 🟢/🟡/🔴. Manager can always override. UI must say it cannot prove authenticity.
 7. **Payouts** — Mon–Sun weeks, request → 🟡 In Progress → ✅ Paid, Uganda phone normalization (0772…, 256772…, +256772…), name normalization, statement import with Strong/Possible/No match, manual confirmation, permanent archive.
@@ -85,3 +86,27 @@ Notes for the next AI:
 - Review screen cannot show anything until Piece 4 creates submissions (via `SubmissionRepository.submit`).
 - Manager "approve" does not yet check or show the NC/BNB or payout parts — those arrive in Pieces 7–8.
 - Worker mode is still the placeholder screen. Next: Piece 4 (worker registration on the worker's own phone, daily/one-time task list from `availableTasks`, submit proof, earnings/week view, payout request via `PayoutRepository.request`).
+
+
+## Piece 4A — Manager access + worker start (what exists now)
+Files (zip: `piece-04a-managers-worker.zip`):
+- `data/ManagerAccounts.kt` — table `manager_accounts` (up to 20): code name (stored UPPERCASE, unique), personal PIN (PBKDF2, 40 000 iterations, per-row salt), `isMain`, `suspendedUntil` (null / time / `Long.MAX_VALUE` = until re-enabled), `accessExpiresAt` (null / time). `ManagerAccountRepository`: `ensureMain`, `login(pin)` (PIN-only; PINs are unique), `blockReason`, `statusText`, `add`, `disable(durationMs|null)`, `allowFor(durationMs)`, `enableNow`, `setPin`, `rename`, `remove`. Only the main manager may call the change methods. Every action goes to the audit log with actor `manager:CODENAME`.
+- MAIN manager is seeded on first use with code name `MAIN` and PIN 114477, stored only as a salted hash (the PIN is not in the source as text). Main can change its own PIN and name in Manager > Managers > MAIN. The main manager can never be disabled or removed.
+- `data/CTDatabase.kt` — database version 2, `Migrations.MIGRATION_1_2` creates `manager_accounts`. The old `manager_identity` table (piece 3's single PIN) is kept but no longer used; it is NOT migrated, the old PIN stops working.
+- `data/ServiceLocator.kt` — `Repos.managerAccounts` added.
+- `ui/ManagerAccess.kt` — `ManagerSession.actor`, `ManagerAccessGate` (PIN sign-in, 5 wrong = 30 s lock, shows the reason if blocked), `ManagersScreen` (main only: list with status, add, detail with Disable for period / Disable until re-enabled / Allow only for period / Enable now / rename / reset PIN / remove). Periods: hours, days, weeks, months (30 d), years (365 d), 1–1000.
+- `ui/ManagerScreens.kt` (replaced) — old PinGate removed; `ManagerArea` signs in with the new gate; a watchdog re-checks the signed-in manager every 5 s and signs them out when disabled; dashboard shows "Signed in as CODE" and a Managers card for the main manager; `ACTOR` now equals `ManagerSession.actor`.
+- `ui/WorkerScreens.kt` — `WorkerArea`: first time = registration (National ID, names, MTN/Airtel number, "number is in my own name" confirmation) via `WorkerRepository.register`; the worker id is remembered in `meta` key `WORKER_META_KEY`. Then `WorkerHomeScreen`: identity card, this-week expected payout (`SubmissionRepository.expectedForWeek`), pending/approved/rejected counts, change payout number (`changePhone`, once/week rule).
+- `ui/CTApp.kt` — Worker destination now `WorkerArea`. `app/build.gradle.kts` — versionCode 4 / 0.4.0.
+
+IMPORTANT limits to remember (Piece 5 must solve):
+- Each phone has its own local database. Disabling/enabling a manager only takes effect on the phone where it is done until Piece 5 adds signed sync (include manager_accounts rules in the signed update from the main manager). Same for workers: a worker registers on their own phone; Piece 5 must carry the registration to the manager's phone in a signed report and keep ids consistent.
+- The main PIN 114477 is 6 digits, so anyone who extracts the APK could brute-force the stored hash. Advise changing it to a longer PIN.
+
+## Next: Piece 4B — Worker tasks, proof, earnings, payout request
+Build in `ui/WorkerScreens.kt` (or new `ui/WorkerTasks.kt` + `ui/WorkerEarnings.kt`) and add buttons on `WorkerHomeScreen`:
+1. Task list from `repos.submissions.availableTasks(workerId)` (daily tasks renew next EAT day; one-time once). Show name, pay, type, example link/video (open with an Intent), proof requirements.
+2. Submission screen: pick a screenshot (Android photo/document picker `ActivityResultContracts.OpenDocument`), read file name/size/dimensions/modified time/mime; compute SHA-256 with `Hashing.sha256Hex(bytes)`; reference/explanation text fields; call `repos.submissions.submit(workerId, taskId, proofs: List<ProofInput>, referenceText, explanation)` (see `ProofInput` in Repositories.kt). Verdict colours stay `Verdict.NONE` until Piece 6.
+3. My submissions / earnings history: `repos.db.submissionDao().observeForWorker(workerId)` grouped by week; status chips Pending/Approved/Rejected with the manager's note.
+4. Payout: show weekly expected, button "Request payout" -> `repos.payouts.request(workerId, weekKey)`; show IN_PROGRESS / PAID with `observeForWorker`; remember phone changes are blocked while IN_PROGRESS.
+5. Keep versionCode increasing (5 / 0.5.0 for 4B) and update this file.
