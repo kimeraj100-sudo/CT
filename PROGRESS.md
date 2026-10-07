@@ -22,8 +22,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | # | Piece | Status |
 |---|-------|--------|
 | 1 | Foundation: build, icon, theme, animated splash, role select | DONE (build confirmed green) |
-| 2 | Data layer | DONE in piece-02-data.zip (build result: check Actions) |
-| 3 | Manager: workers & tasks | NEXT |
+| 2 | Data layer | DONE |
+| 3 | Manager: PIN, dashboard, workers, tasks, review | DONE in piece-03-manager.zip (build result: check Actions) |
 | 4 | Worker: registration, tasks, submit proof, earnings | todo |
 | 5 | Security & sync (HMAC reports/updates) | todo |
 | 6 | Screenshot verification | todo |
@@ -72,4 +72,16 @@ Decisions:
 - Only ONE manager identity can exist (`manager_identity` id=1, PIN). No "create manager" feature exists. Piece 5 adds the manager signing key; workers must trust only updates signed by it. Piece 11 must include it in the encrypted backup.
 - The schema JSON files are generated in CI and not stored in the repo; migrations are still mandatory.
 
-Next: Piece 3 (Manager: setup/PIN screen, dashboard, workers, tasks, review submissions) using `ServiceLocator.get(context)`.
+
+## Piece 3 — Manager area (what exists now)
+Files in `app/src/main/java/com/ctteam/app/ui/`:
+- `Forms.kt` — shared UI helpers: `CTField` (styled text field; `keyboard=`, `secret=`, `singleLine=`, `minLines=`), `ScreenHeader(title, onBack)`, `GhostButton(text, onClick, danger=false)`, `CTChip`, `InfoRow`, `fmtTime(ms)` (EAT), `ugx(n)`. Existing from piece 1 in Components.kt: `GoldButton`, `GlassCard(onClick=)`, `ShimmerLogo`, `CTBackground`; theme object `CT` (Gold, GoldLight, Teal, TextSoft…).
+- `ManagerScreens.kt` — `ManagerArea(onExit)` is the entry. `PinGate` (first time: create PIN = the one-and-only manager; later: unlock; 5 wrong tries = 30 s lock; PIN is asked every time Manager mode is opened). Routes (`MgrRoute`): Dashboard (counts, expected UGX, recent activity, audit-chain check), Workers (list, add worker, detail: edit names, change phone with the once-a-week rule, enable/disable, phone history), Tasks (list, new/edit with versioning), Review (pending submissions, proofs with 🟢🟡🔴 labels, Approve / Reject [reject needs a note]).
+- `CTApp.kt` (replaced) — Manager destination now shows `ManagerArea`. `Screens.kt` — only the version text changed. `MainActivity.kt` — logs the real versionName at start. `app/build.gradle.kts` — versionCode 3 / versionName 0.3.0.
+
+Notes for the next AI:
+- Screens read data with Room `Flow`s via `remember(repos) { dao.observeX() }` + `collectAsState` (always wrap the Flow in `remember`).
+- Actor string for manager actions in the audit log is `"manager"`.
+- Review screen cannot show anything until Piece 4 creates submissions (via `SubmissionRepository.submit`).
+- Manager "approve" does not yet check or show the NC/BNB or payout parts — those arrive in Pieces 7–8.
+- Worker mode is still the placeholder screen. Next: Piece 4 (worker registration on the worker's own phone, daily/one-time task list from `availableTasks`, submit proof, earnings/week view, payout request via `PayoutRepository.request`).
