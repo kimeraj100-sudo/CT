@@ -43,6 +43,10 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 8B-fix | Build fix: two classes named `PickedFile` (Piece 4C2 `WorkerSubmit.kt` and Piece 8B `NcScreens.kt`); the 4C2 one is now `PickedProof` | DONE in piece-08b-z-fix-pickedfile.zip |
 | 8C | Worker BNB claim entry + signed NC_CLAIM report to the manager | NEXT |
 | 8D | Matching engine (coin + exact amount + about 2 min, strict one-to-one), manual override, link to Review | todo |
+| T1 | Team mining: contributions ledger, decayed shares, 70/30 split, UGX rates | todo (after 8D) |
+| T2 | Team mining: worker view (capacity, my share, expected daily payout, what-if) | todo |
+| T3 | Team mining: manager (mined amounts, weekly hash goal, gifts, rig ledger) | todo |
+| T4 | Team mining: leaderboard, levels, streaks, badges, weekly summary | todo |
 | 9 | Telegram bot, notifications, support chat | todo |
 | 10 | Learn & Earn, announcements | todo |
 | 11 | Backup / restore / migration | todo |
@@ -395,3 +399,17 @@ Zip names (they sort after `piece-07-payouts.zip`): `piece-08a-pdf-reader.zip`, 
 
 ## Build-fix note (8B)
 The 8B build failed with `Redeclaration: PickedFile`: `ui/WorkerSubmit.kt` (screenshot picker, 4C2/6) and `ui/NcScreens.kt` (statement file, 8B) both declared a public top-level class `PickedFile` in package `com.ctteam.app.ui`. Fix zip `piece-08b-z-fix-pickedfile.zip` (sorts after `piece-08b-nc-statements.zip`) replaces `WorkerSubmit.kt` (class renamed `PickedProof`) and bumps the version to 20 / 0.19.1. RULE for later pieces: every public top-level name in `ui/` and `data/` must be unique in the package; prefix names or make them `private`.
+
+## Team mining plan (T1–T4) — decided with the owner, build after 8D
+Idea: CT Team is a shared-mining team. Workers contribute crypto mined on their own accounts to the shared NC Wallet (verified through the 8C/8D BNB claims). Contributions buy more rigs, so team hash rate grows. Mined crypto is split: 70% to workers by contribution, 30% to the manager.
+Decisions:
+- Share formula: ALL-TIME contributions with a slight DECAY. weight = sum(value_i * 0.5^(ageDays_i / halfLifeDays)); worker share = weight / total weight of all workers. Default half-life 180 days (about 0.4% per day), manager can change it (stored in `meta`, every change in the audit log). The screen shows both "all-time contributed" and "counts towards share".
+- Only VERIFIED contributions count (matched claim from 8D, or manager override with a note).
+- Common unit for mixing coins: UGX value of a contribution, fixed when it is verified, using the rate then (rate stored with the row so it never changes later).
+- UGX conversion: the app has no internet yet, so the manager sets a rate per coin (BNB, USDT, ...) with a date; every crypto amount is shown with "≈ UGX ..." and the text "estimate, rate set by manager on <date>". When internet arrives (Piece 9) an optional live-rate fetch can pre-fill the rate; the manager still confirms.
+- Daily payout estimate: manager enters (or later imports) the team's mined amount per day; workers' pool = 70%; worker's expected daily payout = pool * share. Manager's 30% shown on the manager dashboard only. Everything labelled as an ESTIMATE.
+- Weekly hash goal: manager sets target hash rate (TH/s etc.) for the week; progress bar for everyone; when reached, shares and payouts are recalculated and a celebration + top contributors list appear.
+- Gifts: manager gives a multiplier (for a period) or a fixed extra payout to a worker, always with a reason, in the audit log, shown to the worker as a gift.
+- Extra ideas agreed: levels (Bronze..Diamond), streaks, badges, rank changes, rig ledger (what contributions bought), inactive-worker alerts for the manager, weekly summary per worker (Piece 9 sends it by Telegram), "what if I contribute X" calculator, honest labels (estimates only, no guaranteed returns).
+- Pieces: T1 data + formulas + rates (tables via ONE migration), T2 worker screens, T3 manager screens (mined amounts, hash goal, gifts, rig ledger), T4 leaderboard, levels, streaks, badges. Team figures reach worker phones as signed M2W updates (new type, same 5C style).
+- Legal/honesty note for the owner: workers pool real money and see payout figures; keep all numbers as estimates and keep records transparent; check Uganda rules on pooled investments.
