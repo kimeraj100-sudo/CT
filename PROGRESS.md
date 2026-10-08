@@ -37,7 +37,11 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 5E | Manager accounts synced to manager phones, signed by the main manager's key (ECDSA P-256, key code checked by voice) | DONE in piece-05e-manager-access.zip (build result: check Actions) |
 | 6 | Screenshot verification | DONE in piece-06-screenshot-verification.zip (build result: check Actions) |
 | 7 | Payouts, phone/name normalization, statement import | DONE in piece-07-payouts.zip (build result: check Actions) |
-| 8 | NC Wallet PDF / BNB matching | NEXT |
+| 7b | Build fix: `Sync.kt` used Kotlin's `MatchResult`, which Piece 7's own `MatchResult` class hid | DONE in piece-07b-fix-matchresult.zip |
+| 8A | Shared PDF text reader (NC Wallet statements AND the Piece 7 payout statements) | DONE in piece-08a-pdf-reader.zip (build result: check Actions) |
+| 8B | NC statement parser + import + remembered rows (overlapping statements) | NEXT |
+| 8C | Worker BNB claim entry + signed NC_CLAIM report to the manager | todo |
+| 8D | Matching engine (coin + exact amount + about 2 min, strict one-to-one), manual override, link to Review | todo |
 | 9 | Telegram bot, notifications, support chat | todo |
 | 10 | Learn & Earn, announcements | todo |
 | 11 | Backup / restore / migration | todo |
@@ -51,7 +55,7 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 5. **Security & sync** — per-worker secret key, HMAC-SHA256 signed reports and updates, task IDs + sequence numbers, replay/duplicate protection, copy/paste and file exchange.
 6. **Screenshot verification** — SHA-256, dHash, size, dimensions, EXIF/editor tags, timestamps, duplicate detection → 🟢/🟡/🔴. Manager can always override. UI must say it cannot prove authenticity.
 7. **Payouts** — Mon–Sun weeks, request → 🟡 In Progress → ✅ Paid, Uganda phone normalization (0772…, 256772…, +256772…), name normalization, statement import with Strong/Possible/No match, manual confirmation, permanent archive.
-8. **NC Wallet / BNB** — import PDF statement, statement time is UTC, user sees EAT (UTC+3), match coin + exact amount + time within ~2 min, strict one-to-one, remember matched/unmatched rows across overlapping statements, manual override.
+8. **NC Wallet / BNB** — split into four small pieces 8A–8D (see "Piece 8 plan" below). Overall: import PDF statement, statement time is UTC, user sees EAT (UTC+3), match coin + exact amount + time within ~2 min, strict one-to-one, remember matched/unmatched rows across overlapping statements, manual override.
 9. **Telegram** — free bot, worker→manager weekly report/support (documents for original screenshots), manager→worker verification/payout/announcements, support history in app.
 10. **Learn & Earn** — content (text, images, video links) published by manager through signed updates, no APK rebuild.
 11. **Backup** — encrypted + integrity-checked + versioned export/import (phone storage, Drive, SD, Telegram), emergency migration.
@@ -338,4 +342,41 @@ Limits / honesty:
 - If the payout amount differs from the line (partial payment) the pair can only be POSSIBLE; `confirmPaid` still records the payout amount. Handle partial payments manually.
 - Not compile-tested (no Kotlin/Gradle in the sandbox); the line-parsing regexes were checked with Python. If the Actions build fails, paste the error log.
 
-Next: Piece 8 (NC Wallet / BNB: PDF statement import with text extraction, UTC to EAT, claims from workers, strict one-to-one matching within about 2 minutes, `nc_statements` / `nc_rows` / `nc_claims` tables already exist, worker claim entry next to a task and a W2M claim message in Sync).
+Next: Piece 8, split into 8A–8D (see "Piece 8 plan" at the end of this file).
+
+
+## Piece 8A — Shared PDF text reader (what exists now)
+Files (zip: `piece-08a-pdf-reader.zip`, sorts after `piece-07b-fix-matchresult.zip`; no database change, DB stays v7): `data/PdfText.kt` (new), `ui/PayoutScreens.kt` (replaced), `app/build.gradle.kts` (replaced: 18 / 0.18.0, new dependency `com.tom-roush:pdfbox-android:2.0.27.0`, extra `META-INF` excludes).
+- `PdfText.read(context, uri): Outcome<String>` (suspend, runs on `Dispatchers.IO`, 45 s time limit): plain text of a PDF with `sortByPosition` so table rows stay on one line. Limits: 10 MB, 200 pages. Clear `Outcome.Err` messages for: not a PDF, too big, too many pages, password-protected, no readable text (scan), took too long, other read error. It never guesses text. `PdfText.looksLikePdf(head)` checks the "%PDF" marker. `PDFBoxResourceLoader.init` is called inside `read`.
+- Payout statement import (Piece 7): "OPEN PDF, CSV OR TEXT FILE" now accepts PDF. A PDF is first shown in a preview card (line count, character count, the first 1 200 characters) with USE THIS TEXT / DISCARD; only after USE THIS TEXT does the text go into the statement box and through the unchanged `StatementParser`. Text/CSV files still load straight into the box (max 500 KB).
+- Piece 8B must call `PdfText.read` and show the same kind of preview before parsing.
+- Not compile-tested (no Kotlin/Gradle in the sandbox). Risks to check first if Actions fails: the pdfbox-android dependency (must resolve from Maven Central) and its packaging; the Java-style setters on `PDFTextStripper`. Real PDF layouts are untested: if a real NC Wallet or MTN PDF reads badly, ask the user for a few sample lines.
+
+## Piece 8 plan — NC Wallet / BNB, split into 8A–8D
+Zip names (they sort after `piece-07-payouts.zip`): `piece-08a-pdf-reader.zip`, `piece-08b-nc-statements.zip`, `piece-08c-nc-claims.zip`, `piece-08d-nc-matching.zip`. Bump versionCode each piece (18 / 0.18.0 for 8A, 19, 20, 21). Update this file after each piece. Existing tables `nc_statements`, `nc_rows`, `nc_claims` (DB v7) are used as they are; if 8C needs extra columns on `nc_claims` (for example `submissionId`), 8C adds ONE migration (v8). Money text is kept as exact decimal text, never a float. Statement times are UTC; the user always sees East Africa Time (UTC+3) next to them.
+
+### 8A — Shared PDF text reader (`data/PdfText.kt`, small UI hook in `ui/PayoutScreens.kt`)
+1. One function `PdfText.read(context, uri): Outcome<String>` that returns the plain text of a PDF, page by page, keeping line breaks and table rows on one line when it can. Preferred: the `com.tom-roush:pdfbox-android` library (add the dependency in `app/build.gradle.kts`, call `PDFBoxResourceLoader.init(context)` once). If a PDF has no text (a scan) return a clear message, never a guess.
+2. Size limit (for example 10 MB), time limit, and reading on `Dispatchers.IO`, so the screen never freezes.
+3. Hook it into the Piece 7 payout statement import: a PDF is no longer refused, its text goes through the same `StatementParser.parse`. Pasted text and CSV keep working.
+4. No database change. Show the extracted text in a small preview box with "Use this text" so the manager can see what was read before anything is parsed.
+
+### 8B — NC statement parser + import + remembered rows (`data/NcStatementParser.kt`, `data/NcRepository.kt`, `ui/NcScreens.kt`)
+1. `NcStatementParser.parse(text)`: finds, per row, the row number, the coin (for example BNB), the exact amount text and the time. Time is read as UTC. Tolerant of layout (like the Piece 7 parser), checked with sample lines.
+2. Import: statement file hash goes into `nc_statements` (the same file twice is refused politely); each row gets `rowKey = coin|amount|utcMillis` and is inserted with IGNORE, so overlapping statements never count a row twice. Rows already matched stay matched; rows still unmatched stay unmatched (remembered across imports).
+3. Manager screen "NC Wallet": import (PDF through 8A, pasted text, text file), list of statements with row counts and "new rows added / already known", list of rows with time in UTC and EAT, matched or not.
+4. Dashboard card "NC Wallet" with the number of unmatched rows. Audit log entry for every import.
+
+### 8C — Worker BNB claim + signed report (`ui/WorkerNcClaim.kt`, sync message in the 5B style)
+1. On the worker phone, next to a task that asks for a BNB deposit: a form with the coin (BNB default), the exact amount (text, up to the statement's decimals) and the time the worker saw in NC Wallet. The worker enters the time in East Africa Time; it is converted to UTC before saving (`timezoneContext = "EAT"` kept for the record). Saved in `nc_claims` (status UNMATCHED).
+2. New W2M message type `NC_CLAIM` (same HMAC envelope, sequence number and replay protection as 5A/5B). It travels with the weekly report so the manager phone gets it. The manager's import creates the `nc_claims` row (idempotent by the worker's claim id).
+3. Worker sees "sent to manager, waiting for check" and later "verified" (the verified status arrives through 5C in 8D). Claims can be edited only until reported.
+4. Migration v8 only if a new column is needed (document it).
+
+### 8D — Matching engine + manual override + link to Review (`data/NcMatcher.kt`, `ui/NcScreens.kt`, Review screen hook)
+1. `NcMatcher.match(claims, rows)`: same coin, EXACT amount text equal (numeric compare with BigDecimal, never double), and the row time within about 2 minutes of the claim time. Strict one-to-one: a row serves one claim and a claim one row. When more than one row or claim fits equally it is shown as "needs a decision" and nothing is matched automatically.
+2. Manager screen: run matching, results (matched, ambiguous, unmatched claims, unmatched rows), CONFIRM per pair and CONFIRM ALL CLEAR MATCHES (always a deliberate tap). Confirmed pairs set `matchedClaimId` / `matchedRowId` and status MATCHED.
+3. Manual override: link any claim to any row, or unlink a pair, with a note; status MANUAL; audit log for every change. A row already matched cannot be matched twice.
+4. Review screen: a submission with a BNB claim shows "NC Wallet: matched / not found / needs decision", using wording that it is evidence and the manager decides.
+5. 5C update message `NC_VERIFIED` (or reuse the decisions update) so the worker sees the claim as verified.
+
