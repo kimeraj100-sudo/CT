@@ -25,7 +25,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 2 | Data layer | DONE |
 | 3 | Manager: PIN, dashboard, workers, tasks, review | DONE in piece-03-manager.zip (build result: check Actions) |
 | 4A | Manager access (20 PINs, code names, main manager) + worker registration/home | DONE in piece-04a-managers-worker.zip (build result: check Actions) |
-| 4B | Worker: task list, submit proof, earnings history, payout request | NEXT |
+| 4B | SECURITY UPGRADE: manager code name + password + PIN, worker username + password + PIN, 30-day quick unlock, random unique manager PINs, reset to default | DONE in piece-04b-security.zip (build result: check Actions) |
+| 4C | Worker: task list, submit proof, earnings history, payout request (was 4B) | NEXT |
 | 5 | Security & sync (HMAC reports/updates) | todo |
 | 6 | Screenshot verification | todo |
 | 7 | Payouts, phone/name normalization, statement import | todo |
@@ -39,7 +40,7 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 1. **Foundation** — compiling project, fixed signing key, launcher icon from the approved logo, jewel theme, animated logo opening with gold light-sweep, Manager/Worker choice screen, different transition per button.
 2. **Data layer** — Room database (add KSP plugin, version matching Kotlin 1.9.24, e.g. `1.9.24-1.0.20`) with tables: workers (+ phone history), tasks (+ task versions), submissions, proofs/hashes, payout requests, payments, NC statement rows & claims, support messages, announcements, learn content, audit log, events. Repository classes. Rules: phone change once/week and not during payout in progress. Schema export on, migrations always provided so updates never wipe data.
 3. **Manager: workers & tasks** — dashboard stats, add/edit workers, create/edit/disable tasks (daily vs one-time, pay, example links, proof requirements), approve/reject submissions with audit log.
-4. **Worker** — split in two. 4A: multi-manager PIN access + worker registration and home. 4B: task list with daily renewal, proof submission screen, earnings history, payout request.
+4. **Worker** — split in three. 4A: multi-manager PIN access + worker registration and home. 4B: security upgrade (passwords, usernames, code names, quick unlock, random manager PINs, reset). 4C: task list with daily renewal, proof submission screen, earnings history, payout request.
 5. **Security & sync** — per-worker secret key, HMAC-SHA256 signed reports and updates, task IDs + sequence numbers, replay/duplicate protection, copy/paste and file exchange.
 6. **Screenshot verification** — SHA-256, dHash, size, dimensions, EXIF/editor tags, timestamps, duplicate detection → 🟢/🟡/🔴. Manager can always override. UI must say it cannot prove authenticity.
 7. **Payouts** — Mon–Sun weeks, request → 🟡 In Progress → ✅ Paid, Uganda phone normalization (0772…, 256772…, +256772…), name normalization, statement import with Strong/Possible/No match, manual confirmation, permanent archive.
@@ -103,10 +104,34 @@ IMPORTANT limits to remember (Piece 5 must solve):
 - Each phone has its own local database. Disabling/enabling a manager only takes effect on the phone where it is done until Piece 5 adds signed sync (include manager_accounts rules in the signed update from the main manager). Same for workers: a worker registers on their own phone; Piece 5 must carry the registration to the manager's phone in a signed report and keep ids consistent.
 - The main PIN 114477 is 6 digits, so anyone who extracts the APK could brute-force the stored hash. Advise changing it to a longer PIN.
 
-## Next: Piece 4B — Worker tasks, proof, earnings, payout request
+## Piece 4B — Security upgrade (what exists now)
+Files (zip: `piece-04b-security.zip`, sorts AFTER `piece-04a-managers-worker.zip`, so it replaces the 4A files below):
+- `data/Security.kt` (new) — tables `pin_ledger`, `device_trust`, `worker_credentials`; `SecurityDao`; `Auth<T>` result (`Ok` / `Wrong` = counts as failed try / `Denied` = refused, not counted); `Secrets` (PBKDF2 hashing: password 100 000 iterations stored as `"<iterations>:<hex>"`, PIN 100 000; rules; `randomPin`; `TRUST_MS` = 30 days); `LockoutStore` (persistent wrong-try lock in `meta`: 5 wrong = 30 s, each further 5 doubles, max 1 h); `WorkerAuthRepository` (`checkNew`, `create`, `fullLogin`, `quick`, `quickAvailable`, `recover`, `changePassword`, `changePin`, `forgetDevice`).
+- `data/ManagerAccounts.kt` (replaced) — entity gains `passSalt`, `passHash`, `credVersion` (+ `activated`). Repository: `fullLogin(code, password, pin)`, `quick(accountId, pinOrPassword)`, `quickCandidate`, `activate(code, issuedPin, newPassword)`, `changeOwnPin`, `changeOwnPassword`, `forgetThisDevice`, `trustedUntil`, main-only `issueNew(by, code, pinLength 6..10)` -> `IssuedAccess(account, pin)` and `resetToDefault(by, targetId, pinLength)`. Old `login(pin)`, `add(code, pin)` and `setPin` are GONE.
+- `data/CTDatabase.kt` (replaced) — version 3, `MIGRATION_2_3` (3 ALTER TABLE columns + 3 new tables). `data/ServiceLocator.kt` (replaced) — `Repos.workerAuth` added.
+- `ui/SecurityScreens.kt` (new) — `CredentialGate` (shared QUICK / FULL / ACTIVATE sign-in screen), `ChangeSecretsCard`, `MySecurityScreen` (manager), `SetupWorkerLoginScreen`, `WorkerLoginFields`, `RecoverWorkerScreen`, `WorkerSecurityCard`.
+- `ui/ManagerAccess.kt` (replaced) — `ManagerAccessGate` now uses `CredentialGate`; Managers screen: ADD MANAGER = code name + PIN length (6/8/10) -> app makes the PIN, shows it ONCE with a "copy message to send" button; manager detail has RESET TO DEFAULT (tap twice, new PIN shown once).
+- `ui/ManagerScreens.kt` (replaced) — route `MySecurity`, dashboard card "My security", watchdog also signs a manager out when `credVersion` changed (reset or credentials changed elsewhere).
+- `ui/WorkerScreens.kt` (replaced) — `WorkerArea` phases: Register -> (Setup for pre-4B workers) -> Gate -> Home; registration now also asks username, password, PIN; home shows username and a change PIN/password card; the "coming next" card now says Piece 4C.
+- `app/build.gradle.kts` — versionCode 5 / 0.5.0.
+
+Rules implemented:
+- FULL sign-in = name (manager code name / worker username) + password + PIN. Needed first time on a phone and again every 30 days on that phone. QUICK unlock = only PIN OR only password, for 30 days after the last FULL sign-in on that phone (`device_trust`). Trust is void when `credVersion` changes (reset, password change, PIN change) or the manager taps "Forget this phone".
+- New manager: main manager enters a code name only. App creates a random PIN (first digit never 0) that was never issued before: checked against `pin_ledger` (a PBKDF2 fingerprint of EVERY PIN ever issued, kept forever) AND against all current accounts. PIN is shown once and never stored readably. Manager opens Manager > "First time or after a reset", enters code name + PIN, creates their own password (8+ chars, a letter and a digit) -> account is ACTIVATED.
+- Reset to default (main manager, any non-main manager): removes the password, issues a NEW unique PIN, bumps `credVersion`, clears trust. The manager must activate again. MAIN can never be reset, disabled or removed.
+- Existing accounts after the update: MAIN and any 4A managers keep their PIN but have no password, so they are "not activated". MAIN activates once with code name MAIN + its current PIN (114477 unless it was changed in 4A) and then creates a password. 4A's manual PIN screens are replaced by My security / Reset to default. Existing workers get a one-time "Secure your account" screen.
+- Worker PIN 4–10 digits, manager PIN 6–10 digits. Own PIN/password changes need the current PIN or password (so a forgotten password can be replaced while the PIN still works).
+- Worker "forgot password or PIN" (INTERIM): National ID + the payout number saved in the app, then new password + PIN. Piece 5 should replace or tighten this with a manager-signed one-time reset code.
+
+Limits to remember (Piece 5 / 11 must solve):
+- Each phone still has its own database. A manager created or reset on the main manager's phone exists only there until the signed sync of Piece 5 carries the account (code name, PIN hash, `credVersion`, status) to the manager's own phone. Piece 5 must also carry `pin_ledger` fingerprints so uniqueness holds across phones, and worker usernames must be checked for uniqueness across workers (today only checked on the worker's own phone).
+- If the main manager forgets BOTH password and PIN after the 30 days, there is no recovery inside the app. Piece 11 (encrypted backup / emergency migration) must cover this. Until then tell the main manager to keep both safe.
+- `pin_ledger` must be part of Piece 11 backups.
+
+## Next: Piece 4C — Worker tasks, proof, earnings, payout request
 Build in `ui/WorkerScreens.kt` (or new `ui/WorkerTasks.kt` + `ui/WorkerEarnings.kt`) and add buttons on `WorkerHomeScreen`:
 1. Task list from `repos.submissions.availableTasks(workerId)` (daily tasks renew next EAT day; one-time once). Show name, pay, type, example link/video (open with an Intent), proof requirements.
 2. Submission screen: pick a screenshot (Android photo/document picker `ActivityResultContracts.OpenDocument`), read file name/size/dimensions/modified time/mime; compute SHA-256 with `Hashing.sha256Hex(bytes)`; reference/explanation text fields; call `repos.submissions.submit(workerId, taskId, proofs: List<ProofInput>, referenceText, explanation)` (see `ProofInput` in Repositories.kt). Verdict colours stay `Verdict.NONE` until Piece 6.
 3. My submissions / earnings history: `repos.db.submissionDao().observeForWorker(workerId)` grouped by week; status chips Pending/Approved/Rejected with the manager's note.
 4. Payout: show weekly expected, button "Request payout" -> `repos.payouts.request(workerId, weekKey)`; show IN_PROGRESS / PAID with `observeForWorker`; remember phone changes are blocked while IN_PROGRESS.
-5. Keep versionCode increasing (5 / 0.5.0 for 4B) and update this file.
+5. Keep versionCode increasing (6 / 0.6.0 for 4C) and update this file. 4C must sit behind the 4B worker sign-in: `WorkerHomeScreen` is only reached after `WPhase.Home`, so add the task/earnings/payout screens as buttons on `WorkerHomeScreen`; the audit actor for worker actions is `"worker:" + workerId`.
