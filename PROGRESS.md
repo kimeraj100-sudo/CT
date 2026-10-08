@@ -28,8 +28,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 4B | SECURITY UPGRADE: manager code name + password + PIN, worker username + password + PIN, 30-day quick unlock, random unique manager PINs, reset to default | DONE in piece-04b-security.zip (build result: check Actions) |
 | 4C1 | Worker task list + task detail + DEMO worker login | DONE in piece-04c1-worker-tasks.zip (build result: check Actions) |
 | 4C2 | Worker proof submission + sign-in to an existing account | DONE in piece-04c2-worker-proof.zip (build result: check Actions) |
-| 4C3 | Worker submissions + earnings history | NEXT |
-| 4C4 | Worker payout request + payout status, final home wiring | todo |
+| 4C3 | Worker submissions + earnings history | DONE in piece-04c3-worker-history.zip (build result: check Actions) |
+| 4C4 | Worker payout request + payout status, final home wiring | NEXT |
 | 5 | Security & sync (HMAC reports/updates) | todo |
 | 6 | Screenshot verification | todo |
 | 7 | Payouts, phone/name normalization, statement import | todo |
@@ -156,6 +156,16 @@ Notes / limits:
 - This sign-in is weaker than the full username + password + PIN rule (one secret is enough) because it was requested that way. Change `loginExisting` if you want it to require both.
 - It only finds accounts in THIS phone's database. Workers added by the manager (no login yet) cannot use it. Cross-phone accounts need Piece 5 sync.
 - Next: 4C3 replaces the `WRoute.History` placeholder; 4C4 `WRoute.Payout`. Demo data must feed the same screens (demo submissions/payouts in memory, never repos).
+
+## Piece 4C3 — Submissions + earnings history (what exists now)
+Files (zip: `piece-04c3-worker-history.zip`, sorts after `piece-04c2-worker-proof.zip`):
+- `ui/WorkerHistory.kt` (new) — models `WSub`, `WProof`; `buildSubCards(subs, tasks)`, `toWProof(entity)`; `WorkerHistoryScreen` (LazyColumn, newest week first; each Mon–Sun week has a summary card: Approved / Pending / Rejected counts + UGX, Expected payout = approved and not yet in a payout, "Already in a payout request"; then that week's submissions as cards with status chip, time (EAT) and the manager's note when rejected). Tapping a submission opens `SubmissionDetail` (times, decision note, reference, explanation, proof files: name, size, dimensions, file date, fingerprint). Verdict labels are NOT shown to workers on purpose. Inner BackHandler returns from detail to the list.
+- `ui/WorkerTasks.kt` (replaced) — `WorkerHomeData.submissions: List<WSub>` (default empty).
+- `ui/WorkerDemo.kt` (replaced) — 7 made-up submissions (this week + paid last week), `proofsFor`; demo home figures now match them (expected UGX 2,000). Demo "send proof" also adds a Pending entry to the demo history (memory only).
+- `ui/WorkerScreens.kt` (replaced) — `WorkerShell` takes `loadProofs`; History route is real; real home builds `subCards` from the Room flows.
+- `app/build.gradle.kts` — versionCode 8 / 0.8.0.
+
+Notes: week totals are computed from the submission list (approved and `payoutId == null`, same rule as `unpaidApprovedTotal`). The home tiles still count all-time pending/approved/rejected under the "This week" heading (4C4 final wiring should make them per-week and link them to History). Next: 4C4 replaces the `WRoute.Payout` placeholder.
 
 ## Next: Piece 4C — Worker tasks, proof, earnings, payout (split into 4C1–4C4)
 Zip names (they sort after `piece-04b-security.zip`): `piece-04c1-worker-tasks.zip`, `piece-04c2-worker-proof.zip`, `piece-04c3-worker-history.zip`, `piece-04c4-worker-payout.zip`. All four sit behind the 4B worker sign-in (`WPhase.Home`). Worker audit actor is `"worker:" + workerId`. Bump versionCode each piece (6 / 0.6.0 for 4C1, 7 for 4C2, 8 for 4C3, 9 for 4C4). Update this file after each.
