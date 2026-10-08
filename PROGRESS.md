@@ -27,8 +27,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 4A | Manager access (20 PINs, code names, main manager) + worker registration/home | DONE in piece-04a-managers-worker.zip (build result: check Actions) |
 | 4B | SECURITY UPGRADE: manager code name + password + PIN, worker username + password + PIN, 30-day quick unlock, random unique manager PINs, reset to default | DONE in piece-04b-security.zip (build result: check Actions) |
 | 4C1 | Worker task list + task detail + DEMO worker login | DONE in piece-04c1-worker-tasks.zip (build result: check Actions) |
-| 4C2 | Worker proof submission (screenshot picker, hash, submit) | NEXT |
-| 4C3 | Worker submissions + earnings history | todo |
+| 4C2 | Worker proof submission + sign-in to an existing account | DONE in piece-04c2-worker-proof.zip (build result: check Actions) |
+| 4C3 | Worker submissions + earnings history | NEXT |
 | 4C4 | Worker payout request + payout status, final home wiring | todo |
 | 5 | Security & sync (HMAC reports/updates) | todo |
 | 6 | Screenshot verification | todo |
@@ -144,6 +144,18 @@ DEMO worker rules:
 - The demo is memory-only: no database reads or writes, no worker/audit/trust/payout records, no lockout counting. Leaving the demo returns to the normal sign-in or register screen.
 - On the worker sign-in and register screens the PIN box uses the normal keyboard (letters allowed only for the word demo). Real PINs are still validated as digits-only.
 - Later pieces: 4C2 replaces the `WRoute.Submit` placeholder, 4C3 `WRoute.History`, 4C4 `WRoute.Payout` (one `when` branch each in `WorkerShell`). Demo data feeds the same screens; when adding real features, give the demo fake data instead of calling repos.
+
+## Piece 4C2 — Proof submission + existing-account sign-in (what exists now)
+Files (zip: `piece-04c2-worker-proof.zip`, sorts after `piece-04c1-worker-tasks.zip`):
+- `ui/WorkerSubmit.kt` (new) — `WorkerSubmitScreen`: `OpenMultipleDocuments` image picker (max `MAX_PROOF_FILES` = 5, 15 MB each, images only). For each file: name, size, width/height (`BitmapFactory` bounds), last-modified (`DocumentsContract`, best effort), MIME, streamed SHA-256. Same picture twice in one submission is refused. Optional reference + explanation. Calls `repos.submissions.submit(...)`; only metadata + hash are stored, not the picture. Verdict stays `NONE` (Piece 6 fills `dhash`, `metadataTags`, verdicts). Success screen -> back to task list; the task then shows "Waiting for review". Double submit is blocked by the repository (PENDING/APPROVED uses the task up).
+- `ui/WorkerScreens.kt` (replaced) — `WorkerShell` now takes `onSend`; Submit route is the real screen. Demo `onSend` only moves the demo task to Waiting in memory. New phase `WPhase.Existing` + `ExistingWorkerLoginScreen`: reached from the "I ALREADY HAVE AN ACCOUNT" button on the register screen; username + password OR PIN (one box); shares the worker wrong-try lockout (`lock:worker`); on success saves `WORKER_META_KEY` so the phone is tied to that worker, then Home. `demo` + `demo` opens the demo here too.
+- `data/Security.kt` (replaced) — `WorkerAuthRepository.loginExisting(username, secret): Auth<String>` (returns the worker id; refreshes 30-day trust; audit `WORKER_LOGIN`).
+- `app/build.gradle.kts` — versionCode 7 / 0.7.0.
+
+Notes / limits:
+- This sign-in is weaker than the full username + password + PIN rule (one secret is enough) because it was requested that way. Change `loginExisting` if you want it to require both.
+- It only finds accounts in THIS phone's database. Workers added by the manager (no login yet) cannot use it. Cross-phone accounts need Piece 5 sync.
+- Next: 4C3 replaces the `WRoute.History` placeholder; 4C4 `WRoute.Payout`. Demo data must feed the same screens (demo submissions/payouts in memory, never repos).
 
 ## Next: Piece 4C — Worker tasks, proof, earnings, payout (split into 4C1–4C4)
 Zip names (they sort after `piece-04b-security.zip`): `piece-04c1-worker-tasks.zip`, `piece-04c2-worker-proof.zip`, `piece-04c3-worker-history.zip`, `piece-04c4-worker-payout.zip`. All four sit behind the 4B worker sign-in (`WPhase.Home`). Worker audit actor is `"worker:" + workerId`. Bump versionCode each piece (6 / 0.6.0 for 4C1, 7 for 4C2, 8 for 4C3, 9 for 4C4). Update this file after each.
