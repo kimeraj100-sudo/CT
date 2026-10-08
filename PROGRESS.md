@@ -30,7 +30,10 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 4C2 | Worker proof submission + sign-in to an existing account | DONE in piece-04c2-worker-proof.zip (build result: check Actions) |
 | 4C3 | Worker submissions + earnings history | DONE in piece-04c3-worker-history.zip (build result: check Actions) |
 | 4C4 | Worker payout request + payout status, final home wiring | DONE in piece-04c4-worker-payout.zip (build result: check Actions) |
-| 5 | Security & sync (HMAC reports/updates) | NEXT |
+| 5A | Sync core: HMAC envelope, per-worker key, enrollment (manager approves + key code), test message, replay protection | DONE in piece-05a-sync-core.zip (build result: check Actions) |
+| 5B | Worker -> manager reports: submissions + proofs metadata, payout requests, phone changes; manager imports into Review | NEXT |
+| 5C | Manager -> worker updates: tasks, approve/reject decisions, payout PAID, worker enable/disable; worker imports | todo |
+| 5D | Manager accounts + pin_ledger sync (signed by main manager), worker username uniqueness, worker reset code replacing interim recovery | todo |
 | 6 | Screenshot verification | todo |
 | 7 | Payouts, phone/name normalization, statement import | todo |
 | 8 | NC Wallet PDF / BNB matching | todo |
@@ -178,6 +181,30 @@ Files (zip: `piece-04c4-worker-payout.zip`, sorts after `piece-04c3-worker-histo
 Notes / limits:
 - The manager confirms payment with `PayoutRepository.confirmPaid` (Piece 3 review code / Piece 7 payout screens). Until Piece 7 the manager UI has no "mark paid" button, so a real payout stays IN_PROGRESS (and blocks the worker's phone change and new requests). Piece 7 must add it, and Piece 5 must carry the request to the manager's phone (each phone has its own database).
 - Piece 4C is finished: the worker side (register / sign in, tasks, proof, history, payout) is complete on one phone.
+- Not compile-tested here (no Gradle in the sandbox). If the Actions build fails, paste the error log.
+
+## Piece 5 — Security & sync, split into 5A–5D
+Why split: it touches both phones and every table. Each part ships alone and is testable by copy/paste. Zip names sort after 4C4: `piece-05a-sync-core.zip`, `piece-05b-...`, `piece-05c-...`, `piece-05d-...`. Bump versionCode each piece (5A = 10 / 0.10.0).
+
+### 5A — Sync core (what exists now)
+Files (zip: `piece-05a-sync-core.zip`):
+- `data/Sync.kt` (new) — tables `sync_keys` (workerId, keyHex) and `sync_seen` (PK workerId+direction+seq), `SyncDao`, `Envelope`, `SyncCodec`, `SyncRepository`.
+- `data/CTDatabase.kt` (replaced) — version 4, `MIGRATION_3_4` (two new tables only). `data/ServiceLocator.kt` (replaced) — `Repos.sync`.
+- `ui/SyncScreens.kt` (new) — `WorkerSyncCard` (worker home) and `ManagerSyncScreen` (manager dashboard > Sync).
+- `ui/ManagerScreens.kt` (replaced) — route `MgrRoute.Sync`, dashboard card "Sync" (all managers). `ui/WorkerScreens.kt` (replaced) — real worker home shows `WorkerSyncCard` (not in demo). `app/build.gradle.kts` — 10 / 0.10.0.
+
+Wire format (every message, one line, no spaces): `CT1.<base64url(JSON)>.<HMAC-SHA256 hex over "CT1.<base64url>">`. JSON = `{v:1, t:type, w:workerId, d:"W2M"|"M2W", s:seq, ts:senderMillis, b:{body}}`. `SyncCodec.parse` finds the code inside pasted text, tolerating line breaks/spaces/extra words; the MAC is exactly 64 hex chars.
+Key: 32 random bytes made on the worker phone (`ensureKey`, lazily, so pre-5 workers need no migration). Key check code = first 6 hex of SHA-256("CTKEY|key") shown as `7F3-A92` on both phones to compare by voice.
+Enrollment (`ENROLL`, seq 0, resendable): body carries nin, names, phone, network, createdAt and the KEY. Manager phone: `receive(text)` -> `SyncIncoming.Enroll(preview)`; the manager compares the key code and approves -> `acceptEnrollment` re-checks everything in one transaction. Modes: NEW (creates worker with the worker's own id), LINK (manager already added the same National ID by hand: ids are re-pointed with `relink*` queries, manager's record/history kept, phone difference warned), ATTACH, ALREADY. Blocking problems: key conflict (different key for same id), National ID or phone owned by another worker, invalid fields, bad signature. `resetKey(workerId, actor)` (button in Sync) clears key + seen rows for a reinstall/new phone.
+Other messages: `receive` looks up the key, verifies the HMAC (bad = rejected + `SYNC_REJECTED` event), then `markSeen` — a repeated (worker, direction, seq) is refused ("Already received"). Gaps are reported but late messages are still accepted. Types the manager phone handles are listed in `SyncRepository.MANAGER_TYPES` (5A: `PING` only; unknown types are NOT consumed, so they can be re-sent after the app is updated). Outgoing counters live in `meta` keys `sync:out:<dir>:<workerId>` (`nextSeq`).
+Delivery: COPY, SHARE (Android chooser), SAVE AS FILE (CreateDocument) on the worker side; paste, paste-from-clipboard, OPEN FILE (max 300 KB) on the manager side. No FileProvider/manifest change was needed. Telegram automation comes in Piece 9.
+
+How to extend (5B/5C): add a type string, make it in `SyncRepository` with `ensureKey` + `nextSeq` + `SyncCodec.seal`, add it to `MANAGER_TYPES` (or a worker-side set) and handle it inside the `when (env.type)` in `receive` (already inside the transaction that records the seq). Always apply messages idempotently by their own ids (submission id, payout id) — the seq check stops replays, ids stop duplicates from re-sent content.
+
+Limits (be honest in the UI and to the user):
+- The enrollment message contains the key, so it must go to the manager in a PRIVATE chat; the key-code voice check detects a swapped message. HMAC proves holder-of-key and integrity, not the person.
+- Keys sit in the app's private database (not Android Keystore); Piece 11 backups must encrypt them. If a worker's key leaks, use RESET SYNC KEY.
+- Timestamps are shown but not enforced (phone clocks differ). Replay protection is by sequence number only.
 - Not compile-tested here (no Gradle in the sandbox). If the Actions build fails, paste the error log.
 
 ## Reference (done): Piece 4C plan — Worker tasks, proof, earnings, payout (split into 4C1–4C4)
