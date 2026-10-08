@@ -40,6 +40,7 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 7b | Build fix: `Sync.kt` used Kotlin's `MatchResult`, which Piece 7's own `MatchResult` class hid | DONE in piece-07b-fix-matchresult.zip |
 | 8A | Shared PDF text reader (NC Wallet statements AND the Piece 7 payout statements) | DONE in piece-08a-pdf-reader.zip (build result: check Actions) |
 | 8B | NC statement parser + import + remembered rows (overlapping statements) | DONE in piece-08b-nc-statements.zip (build result: check Actions) |
+| 8B-fix | Build fix: two classes named `PickedFile` (Piece 4C2 `WorkerSubmit.kt` and Piece 8B `NcScreens.kt`); the 4C2 one is now `PickedProof` | DONE in piece-08b-z-fix-pickedfile.zip |
 | 8C | Worker BNB claim entry + signed NC_CLAIM report to the manager | NEXT |
 | 8D | Matching engine (coin + exact amount + about 2 min, strict one-to-one), manual override, link to Review | todo |
 | 9 | Telegram bot, notifications, support chat | todo |
@@ -392,3 +393,5 @@ Zip names (they sort after `piece-07-payouts.zip`): `piece-08a-pdf-reader.zip`, 
 4. Review screen: a submission with a BNB claim shows "NC Wallet: matched / not found / needs decision", using wording that it is evidence and the manager decides.
 5. 5C update message `NC_VERIFIED` (or reuse the decisions update) so the worker sees the claim as verified.
 
+## Build-fix note (8B)
+The 8B build failed with `Redeclaration: PickedFile`: `ui/WorkerSubmit.kt` (screenshot picker, 4C2/6) and `ui/NcScreens.kt` (statement file, 8B) both declared a public top-level class `PickedFile` in package `com.ctteam.app.ui`. Fix zip `piece-08b-z-fix-pickedfile.zip` (sorts after `piece-08b-nc-statements.zip`) replaces `WorkerSubmit.kt` (class renamed `PickedProof`) and bumps the version to 20 / 0.19.1. RULE for later pieces: every public top-level name in `ui/` and `data/` must be unique in the package; prefix names or make them `private`.
