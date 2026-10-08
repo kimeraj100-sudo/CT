@@ -29,8 +29,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 4C1 | Worker task list + task detail + DEMO worker login | DONE in piece-04c1-worker-tasks.zip (build result: check Actions) |
 | 4C2 | Worker proof submission + sign-in to an existing account | DONE in piece-04c2-worker-proof.zip (build result: check Actions) |
 | 4C3 | Worker submissions + earnings history | DONE in piece-04c3-worker-history.zip (build result: check Actions) |
-| 4C4 | Worker payout request + payout status, final home wiring | NEXT |
-| 5 | Security & sync (HMAC reports/updates) | todo |
+| 4C4 | Worker payout request + payout status, final home wiring | DONE in piece-04c4-worker-payout.zip (build result: check Actions) |
+| 5 | Security & sync (HMAC reports/updates) | NEXT |
 | 6 | Screenshot verification | todo |
 | 7 | Payouts, phone/name normalization, statement import | todo |
 | 8 | NC Wallet PDF / BNB matching | todo |
@@ -167,7 +167,20 @@ Files (zip: `piece-04c3-worker-history.zip`, sorts after `piece-04c2-worker-proo
 
 Notes: week totals are computed from the submission list (approved and `payoutId == null`, same rule as `unpaidApprovedTotal`). The home tiles still count all-time pending/approved/rejected under the "This week" heading (4C4 final wiring should make them per-week and link them to History). Next: 4C4 replaces the `WRoute.Payout` placeholder.
 
-## Next: Piece 4C — Worker tasks, proof, earnings, payout (split into 4C1–4C4)
+## Piece 4C4 — Worker payout request + status + final home wiring (what exists now)
+Files (zip: `piece-04c4-worker-payout.zip`, sorts after `piece-04c3-worker-history.zip`):
+- `ui/WorkerPayout.kt` (new) — UI model `WPayout` + `toWPayout(entity)`; `WorkerPayoutScreen`. Shows (1) a "Payout in progress" card when one exists (amount, week, frozen number, requested time, and the rule that no new payout or number change is possible until it is Paid); (2) "Ready to request": every Mon–Sun week that still has APPROVED, not-yet-attached, not-superseded money (same rule as `unpaidApprovedTotal`), newest first, each with a REQUEST PAYOUT button and a confirm step ("Request UGX x to 07xx…?"). Buttons are replaced by a note when the account is disabled, when a payout is already in progress, or when that week already has a payout (late-approved extra money cannot be requested on its own: repository rule `forWeek`; worker is told to ask the manager); (3) "My payout requests" list with chips 🟡 In progress / ✅ Paid, amount, week, number, requested and paid times (EAT). Calls `repos.payouts.request(workerId, weekKey)` through `onRequestPayout`; repository errors are shown as-is.
+- `ui/WorkerTasks.kt` (replaced) — `WorkerHomeData.payouts: List<WPayout>` (default empty). `WorkerComingSoonScreen` is now unused (kept, harmless).
+- `ui/WorkerDemo.kt` (replaced) — made-up PAID payout for last week (UGX 5,500); demo home counts are now THIS WEEK only (pending 1, approved 2, rejected 1, expected 2,000).
+- `ui/WorkerScreens.kt` (replaced) — `WorkerShell` takes `onRequestPayout`; Payout route is the real screen. Home: Expected payout tile opens Payout; Pending/Approved/Rejected tiles open History and now count THIS WEEK only (superseded excluded); new "Payout in progress" card on home when one exists. Real worker reads `payoutDao().observeForWorker`; expected amount is recomputed when payouts change. Demo request is memory only (creates an IN_PROGRESS demo payout, marks the week's approved demo submissions as in a payout, expected -> 0); never touches repos.
+- `app/build.gradle.kts` — versionCode 9 / 0.9.0.
+
+Notes / limits:
+- The manager confirms payment with `PayoutRepository.confirmPaid` (Piece 3 review code / Piece 7 payout screens). Until Piece 7 the manager UI has no "mark paid" button, so a real payout stays IN_PROGRESS (and blocks the worker's phone change and new requests). Piece 7 must add it, and Piece 5 must carry the request to the manager's phone (each phone has its own database).
+- Piece 4C is finished: the worker side (register / sign in, tasks, proof, history, payout) is complete on one phone.
+- Not compile-tested here (no Gradle in the sandbox). If the Actions build fails, paste the error log.
+
+## Reference (done): Piece 4C plan — Worker tasks, proof, earnings, payout (split into 4C1–4C4)
 Zip names (they sort after `piece-04b-security.zip`): `piece-04c1-worker-tasks.zip`, `piece-04c2-worker-proof.zip`, `piece-04c3-worker-history.zip`, `piece-04c4-worker-payout.zip`. All four sit behind the 4B worker sign-in (`WPhase.Home`). Worker audit actor is `"worker:" + workerId`. Bump versionCode each piece (6 / 0.6.0 for 4C1, 7 for 4C2, 8 for 4C3, 9 for 4C4). Update this file after each.
 
 Shared navigation (built in 4C1): `WorkerHomeScreen` gets a small route state (`WRoute`: Home, Tasks, TaskDetail(id), Submit(taskId), History, Payout). 4C1 creates the routes and the four buttons; buttons for pieces not built yet show a "coming in 4C2/3/4" note. Each later piece adds its own screen file and swaps the note for the real screen (a one-line change in `WorkerScreens.kt`).
