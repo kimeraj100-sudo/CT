@@ -35,8 +35,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 5C | Manager -> worker updates: tasks, approve/reject decisions, payout PAID, worker enable/disable; worker imports | DONE in piece-05c-manager-updates.zip (build result: check Actions) |
 | 5D | Worker identity: username uniqueness across workers, manager-made reset code (replaces interim recovery when connected), JOIN code for a new phone | DONE in piece-05d-worker-identity.zip (build result: check Actions) |
 | 5E | Manager accounts synced to manager phones, signed by the main manager's key (ECDSA P-256, key code checked by voice) | DONE in piece-05e-manager-access.zip (build result: check Actions) |
-| 6 | Screenshot verification | NEXT |
-| 7 | Payouts, phone/name normalization, statement import | todo |
+| 6 | Screenshot verification | DONE in piece-06-screenshot-verification.zip (build result: check Actions) |
+| 7 | Payouts, phone/name normalization, statement import | NEXT |
 | 8 | NC Wallet PDF / BNB matching | todo |
 | 9 | Telegram bot, notifications, support chat | todo |
 | 10 | Learn & Earn, announcements | todo |
@@ -301,3 +301,23 @@ Shared navigation (built in 4C1): `WorkerHomeScreen` gets a small route state (`
 2. Show past payout requests with status IN_PROGRESS or PAID (`observeForWorker`), amount, week and times.
 3. Explain clearly that the phone number cannot be changed while a payout is IN_PROGRESS.
 4. Final wiring on `WorkerHomeScreen`: remove all "coming in…" notes, show pending / approved / rejected counts and expected payout as shortcuts to History and Payout.
+
+
+## Piece 6 — Screenshot verification (what exists now)
+Files (zip: `piece-06-screenshot-verification.zip`, sorts after 5E; no database change, DB stays v7): `data/ScreenshotChecks.kt` (new), `data/Verification.kt` (new), `data/ProofAnalyzer.kt` (new), `data/Daos.kt` (replaced: 4 new queries on `SubmissionDao`: `updateProof`, `proofsWithDhash`, `pendingNow`, `issuesCount`), `data/ServiceLocator.kt` (`Repos.verification`), `ui/WorkerSubmit.kt` (replaced: also computes dHash + tags), `ui/ManagerScreens.kt` (replaced: Review + dashboard), `app/build.gradle.kts` (16 / 0.16.0).
+
+How it works:
+- WORKER phone (`ProofAnalyzer`, called from `readPicked`): `dHash` = 64-bit difference hash of 9x8 average-brightness cells (hex, 16 chars, so it survives re-saving/compression); `tags` = `fmt=png|jpeg|webp|gif|other` (from the file's first bytes) + `sw=<Software>` (PNG tEXt "Software" / JPEG EXIF) + `ed=<editor keyword>` found ONLY in metadata text (PNG tEXt/iTXt chunks, JPEG APPn/COM segments; never in picture data, so no random false hits). These go into `ProofInput.dhash` / `metadataTags` and already travel in the 5B `SUBMISSION` report (`dh`, `tg`).
+- MANAGER phone (`VerificationRepository.verify(submissionId)` / `verifyAll()` / `issuesCount()`): for every SCREENSHOT proof builds a `CheckInput` and calls the pure function `ScreenshotChecker.evaluate`; stores `verdict` (OK / CHECK / DONT_TRUST) and `verdictNotes` (one line per finding, prefixed 🔴 🟡 🟢 ℹ) on the proof. Safe to run any number of times. Screen size comes from the sync row "Worker phone screen: WxH" (5B) for synced submissions, or from this phone for local ones. Other proofs' warnings (⚠ rows from sync) are included in the submission's worst verdict but never rewritten.
+- RED (🔴 Do not trust): the exact same SHA-256 already used in another submission; editing-program keyword in hidden data; file date or file-name date more than 3 days before the submission.
+- YELLOW (🟡 Check carefully): picture fingerprint within 6 of 64 bits of another submission's (says "a real task can look the same every day"); not PNG, or file type and content disagree; size unreadable; picture size does not fit the worker's phone screen (short side within 2%, long side within 12%, either orientation); file under 15 KB; file date/name date after the submission (+10 min) or from an earlier day; file date and name date more than a day apart.
+- ℹ notes (no colour change): screen size/date unknown; made by an older app version (no dHash/tags).
+- UI: Review list shows the worst verdict per submission; detail shows size, file date, hidden-data tags, fingerprint, verdict and reasons, plus the honesty text (green is not proof, red is not proof of cheating, ask for the original, the manager decides). Dashboard has a "Verification issues" tile (waiting submissions with a yellow or red proof). Workers still never see verdicts.
+- File-name times are read as East Africa Time. Patterns: `20261007-232846`, `20261007_232846`, `2026-10-07-23-28-46`.
+
+Limits / honesty:
+- Everything is a warning sign only. Dates and tags can be changed by the sender; a modified app can leave facts out. Exact originals should be requested as Telegram documents (Piece 9) so SHA-256 can be compared again.
+- The near-duplicate check can flag a genuine screen that looks the same every day; that is why it is only yellow.
+- Not compile-tested here (no Kotlin/Gradle in the sandbox); the file-name regexes and the Hamming logic were checked with Python. If the Actions build fails, paste the error log.
+
+Next: Piece 7 (payouts: Mon–Sun cycle screens for the manager, Uganda phone + name normalization in `PhoneUtil`/`NameUtil` already exist, payout statement import with Strong / Possible / No match, manual confirmation, permanent archive; reuse `PayoutRepository.confirmPaid` and the 5B "Payout requests waiting" card).
