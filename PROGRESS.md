@@ -34,8 +34,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 5B | Worker -> manager reports: submissions + proofs metadata, payout requests, phone changes; manager imports into Review | DONE in piece-05b-worker-reports.zip (build result: check Actions) |
 | 5C | Manager -> worker updates: tasks, approve/reject decisions, payout PAID, worker enable/disable; worker imports | DONE in piece-05c-manager-updates.zip (build result: check Actions) |
 | 5D | Worker identity: username uniqueness across workers, manager-made reset code (replaces interim recovery when connected), JOIN code for a new phone | DONE in piece-05d-worker-identity.zip (build result: check Actions) |
-| 5E | Manager accounts synced to manager phones, signed by the main manager's key (ECDSA, key code checked by voice), pin_ledger decision | NEXT |
-| 6 | Screenshot verification | todo |
+| 5E | Manager accounts synced to manager phones, signed by the main manager's key (ECDSA P-256, key code checked by voice) | DONE in piece-05e-manager-access.zip (build result: check Actions) |
+| 6 | Screenshot verification | NEXT |
 | 7 | Payouts, phone/name normalization, statement import | todo |
 | 8 | NC Wallet PDF / BNB matching | todo |
 | 9 | Telegram bot, notifications, support chat | todo |
@@ -250,6 +250,27 @@ Decision for 5E: do NOT ship the whole `pin_ledger` to other phones (its PBKDF2 
 ### 5D-x — One-tap reset request (what exists now)
 Files (zip: `piece-05d-x-reset-request.zip`; the name is chosen so it sorts AFTER `piece-05d-worker-identity.zip` in every locale): `data/Sync.kt`, `ui/SyncScreens.kt` (both replaced), `app/build.gradle.kts` (14 / 0.14.0). No schema change.
 Flow: worker "Forgot password or PIN" (phone already accepted something from the manager) > ASK THE MANAGER = signed W2M `RESET_REQ` (nonce, 4-digit check code shown on both phones) shared with one tap. Manager Sync: the pasted request shows as a "Reset request" card (worker, check code, time); APPROVE, COPY AND SEND = `approveReset` (re-verifies, consumes the request number so it works once, makes the normal `RESET` code), copies it and opens the share window straight away. Worker screen offers a reset code found on the clipboard with one tap (USE IT). Requests expire after 24 h; the reset code still lasts 3 days and works once. The manager's tap stays: without it anyone holding a worker's phone could take over the login and redirect the payout number. Piece 9 (Telegram bot) can carry the same two messages with no copy/paste; the approve tap should stay.
+
+### 5E — Manager accounts between phones (what exists now)
+Files (zip: `piece-05e-manager-access.zip`, sorts after 5D-x): `data/ManagerSync.kt` (new), `data/CTDatabase.kt` (replaced: version 7, `MIGRATION_6_7` = one new table `manager_rev`), `data/ServiceLocator.kt` (`Repos.managerSync`), `data/ManagerAccounts.kt` (replaced: `ensureMain` does nothing on a phone that trusts another phone's main manager), `ui/ManagerSyncScreens.kt` (new), `ui/ManagerAccess.kt` and `ui/ManagerScreens.kt` (replaced), `app/build.gradle.kts` (15 / 0.15.0).
+
+How it works:
+- The main manager's phone makes an ECDSA P-256 key pair the first time it needs one (`ManagerSyncRepository.ensureOwnKeyCode`; private key in `meta` key `mgrsync:priv`, public `mgrsync:pub`). Managers > top card "Your signing key code" shows `7F3-A92` (first 6 hex of SHA-256("CTMKEY|"+public key)) to read by voice.
+- Wire format (separate from the worker codes, prefix `CTM1`): `CTM1.<base64url JSON>.<base64url 64-byte raw ECDSA r||s>`; the signature covers `CTM1.<base64url JSON>`. JSON = {v:1, t, rev, pk (public key), mn (main code name), ts, b:{...}}. Types: `ACCT` (id, code name, PIN salt+hash+iterations, suspendedUntil, accessExpiresAt, createdAt; NEVER a password; only that manager's own PIN hash) and `REMOVE` (id, code name). `SyncCodec`/worker `CT1.` codes are untouched and do not match the `CTM1.` pattern.
+- `rev` = main phone time, always rising (`nextRev`). A manager phone applies a code only if `rev` is higher than the one in table `manager_rev` for that account, so old codes can not undo newer ones, and a REMOVE leaves a tombstone so an old ACCT can not bring the manager back.
+- Main phone: Managers > a manager > MAKE ACCESS CODE (`makeAccountCode`) after any change (new, reset, disable, allow-for-period, enable, rename). Removing a manager makes a signed `REMOVE` code first (`makeRemoveCode`) and shows it on the Managers screen.
+- Manager phone: at the sign-in screen, IMPORT ACCESS CODE (top right) works BEFORE signing in. First code from an unknown key shows a pending card with the key code; the person compares it with the main manager by phone and taps "IT MATCHES — APPROVE" (`approveKey`). After that the key is trusted (`mgrsync:trusted_pub`) and every later code signed by it is applied without asking. A different key later = red warning and a new voice check. FORGET THIS KEY clears the trust (accounts stay).
+- Applying ACCT: new account is inserted not-activated (the manager then uses "First time or after a reset" with code name + PIN and creates a password on their own phone). Existing account: code name and disabled/allowed periods are updated; if the PIN hash changed (reset) the local password is removed, `credVersion` is bumped and quick-unlock trust is cleared, so the 5-second watchdog signs the manager out. REMOVE deletes the account and signs them out.
+- A phone that approves another phone's key becomes a "manager phone" (`mgrsync:managerphone` = 1): its own seeded MAIN row is deleted and not re-created. It is refused if that MAIN account was already activated or if the phone holds its own signing key (it is a main phone).
+- Decision kept from 5D: `pin_ledger` is NOT synced (uniqueness of issued PINs is guaranteed on the main phone, which is the only issuer; the ledger goes into the Piece 11 encrypted backup). Because the code holds the manager's PIN HASH, send each code only to that manager and send the PIN by a different route; long PINs (8 to 10 digits) make an intercepted code much harder to attack.
+
+Limits (honest):
+- Each manager phone is still its own island for DATA: workers, submissions and payouts live on the phone whose manager approved the worker's connection. 5E only carries manager ACCOUNTS and their access rules. Sharing worker data between manager phones is NOT built (needs its own piece before Piece 7 payouts across managers).
+- Disabling a manager only takes effect on a phone after that phone imports the newer code; a manager who never imports it keeps working there. The signed code can not force a phone to read it.
+- Phones with the APK but no trusted key still have their own local MAIN row until the first approve; anyone who knows the first PIN can activate it locally, but nothing signed by that phone is trusted by other phones.
+- The signing private key sits in the app database (not Android Keystore) so Piece 11 can back it up; losing the main phone without a backup means managers must re-trust a new key (voice check again).
+- Not compile-tested here (no Kotlin/Gradle in the sandbox). The DER/raw ECDSA conversion was checked against a Python reference. If the Actions build fails, paste the error log.
+
 
 ## Reference (done): Piece 4C plan — Worker tasks, proof, earnings, payout (split into 4C1–4C4)
 Zip names (they sort after `piece-04b-security.zip`): `piece-04c1-worker-tasks.zip`, `piece-04c2-worker-proof.zip`, `piece-04c3-worker-history.zip`, `piece-04c4-worker-payout.zip`. All four sit behind the 4B worker sign-in (`WPhase.Home`). Worker audit actor is `"worker:" + workerId`. Bump versionCode each piece (6 / 0.6.0 for 4C1, 7 for 4C2, 8 for 4C3, 9 for 4C4). Update this file after each.
