@@ -247,6 +247,10 @@ Limits: a JOIN code is not single-use (it holds the key): send privately, use RE
 Not done (moved to 5E): manager accounts on other managers' phones, `pin_ledger` sync.
 Decision for 5E: do NOT ship the whole `pin_ledger` to other phones (its PBKDF2 fingerprints of 6-digit PINs can be brute-forced offline, which would let one manager learn others' PINs). Only the main manager issues PINs, so uniqueness is kept on the issuing phone; the ledger belongs in the Piece 11 encrypted backup.
 
+### 5D-x — One-tap reset request (what exists now)
+Files (zip: `piece-05d-x-reset-request.zip`; the name is chosen so it sorts AFTER `piece-05d-worker-identity.zip` in every locale): `data/Sync.kt`, `ui/SyncScreens.kt` (both replaced), `app/build.gradle.kts` (14 / 0.14.0). No schema change.
+Flow: worker "Forgot password or PIN" (phone already accepted something from the manager) > ASK THE MANAGER = signed W2M `RESET_REQ` (nonce, 4-digit check code shown on both phones) shared with one tap. Manager Sync: the pasted request shows as a "Reset request" card (worker, check code, time); APPROVE, COPY AND SEND = `approveReset` (re-verifies, consumes the request number so it works once, makes the normal `RESET` code), copies it and opens the share window straight away. Worker screen offers a reset code found on the clipboard with one tap (USE IT). Requests expire after 24 h; the reset code still lasts 3 days and works once. The manager's tap stays: without it anyone holding a worker's phone could take over the login and redirect the payout number. Piece 9 (Telegram bot) can carry the same two messages with no copy/paste; the approve tap should stay.
+
 ## Reference (done): Piece 4C plan — Worker tasks, proof, earnings, payout (split into 4C1–4C4)
 Zip names (they sort after `piece-04b-security.zip`): `piece-04c1-worker-tasks.zip`, `piece-04c2-worker-proof.zip`, `piece-04c3-worker-history.zip`, `piece-04c4-worker-payout.zip`. All four sit behind the 4B worker sign-in (`WPhase.Home`). Worker audit actor is `"worker:" + workerId`. Bump versionCode each piece (6 / 0.6.0 for 4C1, 7 for 4C2, 8 for 4C3, 9 for 4C4). Update this file after each.
 
