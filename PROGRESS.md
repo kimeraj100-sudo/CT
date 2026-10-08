@@ -26,7 +26,10 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 3 | Manager: PIN, dashboard, workers, tasks, review | DONE in piece-03-manager.zip (build result: check Actions) |
 | 4A | Manager access (20 PINs, code names, main manager) + worker registration/home | DONE in piece-04a-managers-worker.zip (build result: check Actions) |
 | 4B | SECURITY UPGRADE: manager code name + password + PIN, worker username + password + PIN, 30-day quick unlock, random unique manager PINs, reset to default | DONE in piece-04b-security.zip (build result: check Actions) |
-| 4C | Worker: task list, submit proof, earnings history, payout request (was 4B) | NEXT |
+| 4C1 | Worker task list + task detail + DEMO worker login | DONE in piece-04c1-worker-tasks.zip (build result: check Actions) |
+| 4C2 | Worker proof submission (screenshot picker, hash, submit) | NEXT |
+| 4C3 | Worker submissions + earnings history | todo |
+| 4C4 | Worker payout request + payout status, final home wiring | todo |
 | 5 | Security & sync (HMAC reports/updates) | todo |
 | 6 | Screenshot verification | todo |
 | 7 | Payouts, phone/name normalization, statement import | todo |
@@ -40,7 +43,7 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 1. **Foundation** — compiling project, fixed signing key, launcher icon from the approved logo, jewel theme, animated logo opening with gold light-sweep, Manager/Worker choice screen, different transition per button.
 2. **Data layer** — Room database (add KSP plugin, version matching Kotlin 1.9.24, e.g. `1.9.24-1.0.20`) with tables: workers (+ phone history), tasks (+ task versions), submissions, proofs/hashes, payout requests, payments, NC statement rows & claims, support messages, announcements, learn content, audit log, events. Repository classes. Rules: phone change once/week and not during payout in progress. Schema export on, migrations always provided so updates never wipe data.
 3. **Manager: workers & tasks** — dashboard stats, add/edit workers, create/edit/disable tasks (daily vs one-time, pay, example links, proof requirements), approve/reject submissions with audit log.
-4. **Worker** — split in three. 4A: multi-manager PIN access + worker registration and home. 4B: security upgrade (passwords, usernames, code names, quick unlock, random manager PINs, reset). 4C: task list with daily renewal, proof submission screen, earnings history, payout request.
+4. **Worker** — split in three. 4A: multi-manager PIN access + worker registration and home. 4B: security upgrade (passwords, usernames, code names, quick unlock, random manager PINs, reset). 4C is split into four small pieces: 4C1 task list and detail, 4C2 proof submission, 4C3 submissions and earnings history, 4C4 payout request and status.
 5. **Security & sync** — per-worker secret key, HMAC-SHA256 signed reports and updates, task IDs + sequence numbers, replay/duplicate protection, copy/paste and file exchange.
 6. **Screenshot verification** — SHA-256, dHash, size, dimensions, EXIF/editor tags, timestamps, duplicate detection → 🟢/🟡/🔴. Manager can always override. UI must say it cannot prove authenticity.
 7. **Payouts** — Mon–Sun weeks, request → 🟡 In Progress → ✅ Paid, Uganda phone normalization (0772…, 256772…, +256772…), name normalization, statement import with Strong/Possible/No match, manual confirmation, permanent archive.
@@ -128,10 +131,46 @@ Limits to remember (Piece 5 / 11 must solve):
 - If the main manager forgets BOTH password and PIN after the 30 days, there is no recovery inside the app. Piece 11 (encrypted backup / emergency migration) must cover this. Until then tell the main manager to keep both safe.
 - `pin_ledger` must be part of Piece 11 backups.
 
-## Next: Piece 4C — Worker tasks, proof, earnings, payout request
-Build in `ui/WorkerScreens.kt` (or new `ui/WorkerTasks.kt` + `ui/WorkerEarnings.kt`) and add buttons on `WorkerHomeScreen`:
-1. Task list from `repos.submissions.availableTasks(workerId)` (daily tasks renew next EAT day; one-time once). Show name, pay, type, example link/video (open with an Intent), proof requirements.
-2. Submission screen: pick a screenshot (Android photo/document picker `ActivityResultContracts.OpenDocument`), read file name/size/dimensions/modified time/mime; compute SHA-256 with `Hashing.sha256Hex(bytes)`; reference/explanation text fields; call `repos.submissions.submit(workerId, taskId, proofs: List<ProofInput>, referenceText, explanation)` (see `ProofInput` in Repositories.kt). Verdict colours stay `Verdict.NONE` until Piece 6.
-3. My submissions / earnings history: `repos.db.submissionDao().observeForWorker(workerId)` grouped by week; status chips Pending/Approved/Rejected with the manager's note.
-4. Payout: show weekly expected, button "Request payout" -> `repos.payouts.request(workerId, weekKey)`; show IN_PROGRESS / PAID with `observeForWorker`; remember phone changes are blocked while IN_PROGRESS.
-5. Keep versionCode increasing (6 / 0.6.0 for 4C) and update this file. 4C must sit behind the 4B worker sign-in: `WorkerHomeScreen` is only reached after `WPhase.Home`, so add the task/earnings/payout screens as buttons on `WorkerHomeScreen`; the audit actor for worker actions is `"worker:" + workerId`.
+## Piece 4C1 — Worker tasks + demo worker (what exists now)
+Files (zip: `piece-04c1-worker-tasks.zip`, sorts after `piece-04b-security.zip`):
+- `ui/WorkerTasks.kt` (new) — UI models `WTask`, `TaskState` (AVAILABLE / WAITING / DONE), `WorkerHomeData`, route type `WRoute` (Home, Tasks, TaskDetail, Submit, History, Payout); `buildTaskCards(tasks, subs, now)` (same renewal rules as `availableTasks`: daily = once per EAT day, one-time = once; a REJECTED submission frees the task and shows the manager's note); `WorkerTaskListScreen`, `WorkerTaskDetailScreen` (description, pay, proof requirements, example video/link opened with `Intent.ACTION_VIEW`, http(s) only), `WorkerComingSoonScreen`.
+- `ui/WorkerDemo.kt` (new) — `WorkerDemo.isDemoLogin(...)`, `homeData()` with 6 made-up tasks covering every state.
+- `ui/WorkerScreens.kt` (replaced) — `WorkerShell` (shared by real worker and demo; route state + BackHandler), `WorkerHomeScreen` (real data from Room flows, tasks re-evaluated every 30 s), `WorkerDemoScreen`. Buttons: MY TASKS (real), SUBMISSIONS & EARNINGS and REQUEST PAYOUT (placeholders for 4C3/4C4); "Submit proof" opens a placeholder for 4C2. Disabled worker sees no tasks plus the disabled message.
+- `ui/SecurityScreens.kt` (replaced) — `CredentialGate` gets `allowDemo` / `onDemo` (default off, so the Manager gate never has it); `demoAwarePin`; `WorkerLoginFields(allowDemo=)`.
+- `app/build.gradle.kts` — versionCode 6 / 0.6.0.
+
+DEMO worker rules:
+- Type `demo` in username, password and PIN on the Worker sign-in screen (or the one word `demo` in the quick PIN/password box), or on the Worker REGISTER screen type it in username, password and PIN and tap REGISTER. Not available in Manager mode.
+- The demo is memory-only: no database reads or writes, no worker/audit/trust/payout records, no lockout counting. Leaving the demo returns to the normal sign-in or register screen.
+- On the worker sign-in and register screens the PIN box uses the normal keyboard (letters allowed only for the word demo). Real PINs are still validated as digits-only.
+- Later pieces: 4C2 replaces the `WRoute.Submit` placeholder, 4C3 `WRoute.History`, 4C4 `WRoute.Payout` (one `when` branch each in `WorkerShell`). Demo data feeds the same screens; when adding real features, give the demo fake data instead of calling repos.
+
+## Next: Piece 4C — Worker tasks, proof, earnings, payout (split into 4C1–4C4)
+Zip names (they sort after `piece-04b-security.zip`): `piece-04c1-worker-tasks.zip`, `piece-04c2-worker-proof.zip`, `piece-04c3-worker-history.zip`, `piece-04c4-worker-payout.zip`. All four sit behind the 4B worker sign-in (`WPhase.Home`). Worker audit actor is `"worker:" + workerId`. Bump versionCode each piece (6 / 0.6.0 for 4C1, 7 for 4C2, 8 for 4C3, 9 for 4C4). Update this file after each.
+
+Shared navigation (built in 4C1): `WorkerHomeScreen` gets a small route state (`WRoute`: Home, Tasks, TaskDetail(id), Submit(taskId), History, Payout). 4C1 creates the routes and the four buttons; buttons for pieces not built yet show a "coming in 4C2/3/4" note. Each later piece adds its own screen file and swaps the note for the real screen (a one-line change in `WorkerScreens.kt`).
+
+### 4C1 — Task list + task detail (`ui/WorkerTasks.kt`, replaces `ui/WorkerScreens.kt`)
+1. Task list from `repos.submissions.availableTasks(workerId)`: daily tasks renew next EAT day, one-time tasks once. Show name, pay (`ugx`), type chip (Daily / One-time), and a "done today" or "waiting for review" state.
+2. Task detail: description, pay, proof requirements, example links/video opened with an Intent (`Intent.ACTION_VIEW`).
+3. "Submit proof" button goes to the Submit route (placeholder until 4C2).
+4. Disabled worker (`worker.active == false`): list is empty with the manager-disabled message.
+
+### 4C2 — Proof submission (`ui/WorkerSubmit.kt`)
+1. Screenshot picker with `ActivityResultContracts.OpenDocument` (one or more images, as the task requires).
+2. Read file name, size, dimensions, modified time, mime. Compute SHA-256 with `Hashing.sha256Hex(bytes)`.
+3. Reference text and explanation fields.
+4. Call `repos.submissions.submit(workerId, taskId, proofs: List<ProofInput>, referenceText, explanation)` (see `ProofInput` in Repositories.kt). Verdict stays `Verdict.NONE` until Piece 6.
+5. Success screen, then back to the task list. Block double-submit of the same task in the same renewal period.
+
+### 4C3 — Submissions and earnings history (`ui/WorkerHistory.kt`)
+1. `repos.db.submissionDao().observeForWorker(workerId)` grouped by Mon–Sun week (`TimeUtil.weekKey`).
+2. Status chips Pending / Approved / Rejected, with the manager's note on rejected items.
+3. Weekly totals: approved, pending, rejected, expected payout (`expectedForWeek`).
+4. Tap a submission to see its proofs and times (EAT).
+
+### 4C4 — Payout request + status (`ui/WorkerPayout.kt`) and final home wiring
+1. Show this week's expected amount and a "Request payout" button calling `repos.payouts.request(workerId, weekKey)`.
+2. Show past payout requests with status IN_PROGRESS or PAID (`observeForWorker`), amount, week and times.
+3. Explain clearly that the phone number cannot be changed while a payout is IN_PROGRESS.
+4. Final wiring on `WorkerHomeScreen`: remove all "coming in…" notes, show pending / approved / rejected counts and expected payout as shortcuts to History and Payout.
