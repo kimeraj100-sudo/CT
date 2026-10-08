@@ -36,8 +36,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 5D | Worker identity: username uniqueness across workers, manager-made reset code (replaces interim recovery when connected), JOIN code for a new phone | DONE in piece-05d-worker-identity.zip (build result: check Actions) |
 | 5E | Manager accounts synced to manager phones, signed by the main manager's key (ECDSA P-256, key code checked by voice) | DONE in piece-05e-manager-access.zip (build result: check Actions) |
 | 6 | Screenshot verification | DONE in piece-06-screenshot-verification.zip (build result: check Actions) |
-| 7 | Payouts, phone/name normalization, statement import | NEXT |
-| 8 | NC Wallet PDF / BNB matching | todo |
+| 7 | Payouts, phone/name normalization, statement import | DONE in piece-07-payouts.zip (build result: check Actions) |
+| 8 | NC Wallet PDF / BNB matching | NEXT |
 | 9 | Telegram bot, notifications, support chat | todo |
 | 10 | Learn & Earn, announcements | todo |
 | 11 | Backup / restore / migration | todo |
@@ -321,3 +321,21 @@ Limits / honesty:
 - Not compile-tested here (no Kotlin/Gradle in the sandbox); the file-name regexes and the Hamming logic were checked with Python. If the Actions build fails, paste the error log.
 
 Next: Piece 7 (payouts: Mon–Sun cycle screens for the manager, Uganda phone + name normalization in `PhoneUtil`/`NameUtil` already exist, payout statement import with Strong / Possible / No match, manual confirmation, permanent archive; reuse `PayoutRepository.confirmPaid` and the 5B "Payout requests waiting" card).
+
+
+## Piece 7 — Payouts (what exists now)
+Files (zip: `piece-07-payouts.zip`, sorts after piece-06; no database change, DB stays v7): `data/PayoutMatching.kt` (new), `ui/PayoutScreens.kt` (new), `data/Daos.kt` (replaced: `PayoutDao.observePaid`, `PayoutDao.paymentRefCount`), `ui/ManagerScreens.kt` (replaced: route `MgrRoute.Payouts`, dashboard card "Payouts" with the number waiting), `app/build.gradle.kts` (17 / 0.17.0).
+
+Flow (SPEC section 16): worker requests (status In progress, reaches the manager phone by the 5B report) -> manager pays the worker's MTN/Airtel number outside the app -> Manager > Payouts: either IMPORT PAYMENT STATEMENT (automatic matching) or MARK PAID BY HAND -> manager confirms (two taps, always) -> `PayoutRepository.confirmPaid` (PAID is permanent; payments row written; audit `PAYOUT_CONFIRMED`) -> the 5C `PAYOUT_PAID` update tells the worker. The old "Payout requests waiting" card in the Sync screen still works and calls the same repository method.
+- Statement reading (`StatementParser.parse(text)`): pasted text, clipboard or a CSV/text file (max 500 KB, no PDF yet: a PDF is refused with advice to copy the table text; Piece 8 will need PDF text reading for the NC Wallet statement anyway, build one reader and reuse it here). Layout-free: per line it finds Uganda phone numbers (0772..., 256772..., +256772..., normalized with `PhoneUtil`, only valid MTN/Airtel), a date/time (dd/MM/yyyy or yyyy-MM-dd, read as East Africa Time), EVERY whole-shilling number on the line (amount, fee, balance; commas and .00 handled; letters-attached IDs like TXN123456 ignored) and name words (stop-word list removes "sent", "ugx", "balance"...). A line counts as a payment line if it has an amount plus a phone or 2+ name words. Each line gets a stable key `ST:<sha256 prefix>` (+ `-n` for identical repeats).
+- Matching (`PayoutMatcher.match`): for each waiting payout and statement line: phone agrees (payout's frozen number is on the line), name agrees (2+ of the worker's name words on the line; case, order, spacing, punctuation do not matter; middle name may be missing), amount agrees (payout amount is one of the numbers on the line). STRONG = all three; POSSIBLE = exactly two, or more than one line/payout fits equally; below that = NONE (amount alone is never enough). Strict one-to-one inside an import; lines whose key is already in `payments.statementRef` (used for an earlier confirmed payout) are ignored in later imports, so overlapping statements cannot pay twice.
+- Results screen: counts, per payout a card with confidence, the statement line, what agreed or not, CONFIRM PAID (YES tap), CONFIRM ALL STRONG, plus statement lines that matched nothing. AUTO_MATCH confirmations store `statementRef` = line key, `matchConfidence`, and the line text in the note. Manual ones store MANUAL and an optional note (e.g. the transaction ID).
+- Paid archive (permanent list from `observePaid`): worker, amount, number, week, requested/paid times, how (matched STRONG/POSSIBLE or by hand), manager code name, note.
+
+Limits / honesty:
+- Real MTN/Airtel statements were not available while writing, so the reader is deliberately tolerant but untested on real files. If a real statement parses badly, ask the user for a few sample lines (blank out names/numbers if they wish) and adjust `StatementParser`.
+- A match is only a suggestion; confirming means "I really sent it". The app cannot see mobile money.
+- If the payout amount differs from the line (partial payment) the pair can only be POSSIBLE; `confirmPaid` still records the payout amount. Handle partial payments manually.
+- Not compile-tested (no Kotlin/Gradle in the sandbox); the line-parsing regexes were checked with Python. If the Actions build fails, paste the error log.
+
+Next: Piece 8 (NC Wallet / BNB: PDF statement import with text extraction, UTC to EAT, claims from workers, strict one-to-one matching within about 2 minutes, `nc_statements` / `nc_rows` / `nc_claims` tables already exist, worker claim entry next to a task and a W2M claim message in Sync).
