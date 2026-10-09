@@ -46,7 +46,9 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | T1 | Team mining: contributions ledger, decayed shares, 70/30 split, UGX rates | DONE in piece-08t1-team-ledger.zip (DB v9; build result: check Actions) |
 | T2a | Team mining: signed TEAM_VIEW update to the worker + worker "Team mining" card | DONE in piece-08t2a-team-worker-sync.zip (build result: check Actions) |
 | T2b | Team mining: manager's daily mined estimate, expected daily payout, what-if calculator, team capacity totals | DONE in piece-08t2b-team-daily-whatif.zip (no DB change; build result: check Actions) |
-| T3 | Team mining: manager (mined amounts, weekly hash goal, gifts, rig ledger) | NEXT |
+| T3a | Team mining: real daily mined amounts (DB v10), 7-day average replaces the typed estimate | DONE in piece-08t3a-mined-days.zip (app 26 / 0.25.0; build result: check Actions) |
+| T3b | Team mining: weekly hash goal + rig ledger (capacity), progress carried to workers | NEXT |
+| T3c | Team mining: gifts (multiplier for a period or fixed extra payout, reason required) shown to the worker | todo |
 | T4 | Team mining: leaderboard, levels, streaks, badges, weekly summary | todo |
 | 9 | Telegram bot, notifications, support chat | todo |
 | 10 | Learn & Earn, announcements | todo |
@@ -73,6 +75,18 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 3. Do not restart or simplify the concept; if something can't be done yet, leave the architecture for it.
 4. After each piece: update this file, and ask the user to paste the GitHub Actions error log if the build fails.
 5. Keep honesty in the UI: automated checks flag, the manager decides.
+
+## HOW TO KEEP EACH CHAT SMALL (the splitting trick) — read before planning any piece
+Big pieces make a chat run out of room before the zip is finished. Do this every time:
+1. **Estimate first, then split.** Before writing code, list the features of the piece and the files each one touches. If the piece would need more than about 4 new files, OR a database migration AND a screen AND a sync message, OR roughly 900+ new lines, SPLIT it into lettered parts (T3 -> T3a, T3b, T3c; 4C -> 4C1..4C4; 5 -> 5A..5E). Say the split to the user in two lines and build part (a) only.
+2. **One slice that works alone.** Each part must be usable and testable by itself: its data (at most ONE migration) + the smallest screen that shows it. Never leave a part half-wired for the next one.
+3. **Zip names.** `piece-<number><letter>-<name>.zip`; keep the sort order right (`08t3a` < `08t3b` < `piece-09`). A name that sorts later than a newer piece can overwrite it.
+4. **New file beats replaced file.** Put new code in NEW files. When an old file must change, change only the lines needed: unzip every zip in sorted order, read the real latest file, and edit with exact-string replace that ASSERTS the old text exists once (a Python patch script). Ship the patched file whole (the repo replaces by path). Never retype big files from memory.
+5. **Messages grow by optional fields.** Add new fields to the sync messages as optional (old phones ignore them); bump a `rev` or fingerprint only through the existing helpers.
+6. **Check what you can.** No Kotlin compiler is available in the sandbox, so: balance-check braces, run the pure formulas in a Python/Node port, check SQL migrations in sqlite, and keep Room entity/migration column types identical.
+7. **Close the piece in this order:** zip -> update THIS file (status row, "what exists now", limits, next) -> tell the user which zips to upload to the next chat.
+8. **Tell the user what to upload next:** only `PROGRESS.md` and the zips of files the next part changes or depends on (see FILE OWNERS at the bottom: the latest zip that holds each file). When in doubt upload all zips; the sandbox unzips them in sorted order.
+9. **Keep this file short.** When a "what exists now" section is older than three pieces, shrink it to its API names and limits; the code is the source of truth.
 
 ## Piece 2 — Data layer (what exists now)
 Files (package `com.ctteam.app.data`, folder `app/src/main/java/com/ctteam/app/data/`):
@@ -429,9 +443,17 @@ T2b (`piece-08t2b-team-daily-whatif.zip`, after T2a; app 25 / 0.24.0, still DB v
 - Capacity: only contributed totals and contributors. Hash-rate capacity and the weekly goal are NOT built (need T3's rig ledger); the card says so.
 - Not compile-tested. If Actions fails, paste the error log.
 
-## Next: T3 (manager: mined amounts, weekly hash goal, gifts, rig ledger)
-Replace the single daily estimate by real daily mined amounts (table, migration v10), weekly hash-rate goal with progress carried to workers in TEAM_VIEW, gifts (multiplier for a period or fixed extra payout, reason required, audit-logged, shown to the worker), rig ledger (what contributions bought; this gives the capacity figure). Zip name `piece-08t3-...`.
+## Piece T3a — Real daily mined amounts (what exists now)
+Files (zip: `piece-08t3a-mined-days.zip`, sorts after 08t2b; app 26 / 0.25.0; DB v10 with `MIGRATION_9_10` = ONE new table): `data/Team.kt` (replaced: entity `TeamMinedDayEntity` table `team_mined_days` [day yyyy-MM-dd EAT = primary key, minedUgx, note, setBy, setAt]; `TeamDao` mined-day queries; `TeamMath.averageDaily`; `TeamRepository.setMinedDay(day, ugx, note, actor)` [replaces the same day, audit `TEAM_MINED_DAY_SET` with old and new value; no future days; not older than 400 days; 0 allowed], `deleteMinedDay`, `observeMinedDays`, `estimateDaily`; companion `TeamRepository.estimateDaily(db, now)`), `data/TeamWorker.kt` (replaced: `md` now comes from `estimateDaily`), `data/CTDatabase.kt` (replaced: v10), `ui/TeamScreens.kt` (replaced: new card "Daily mined amounts"), `app/build.gradle.kts`.
+- The figure workers see (`md` in TEAM_VIEW) = AVERAGE of the amounts the manager ENTERED for the last 7 East Africa days, today included (days without an entry are skipped, not counted as zero). If NO day was entered in that window the old typed estimate (T2b, `meta` `team:dailyMinedUgx`) is used. If days were entered and average 0, workers get no estimate. The message format did not change, so T2a/T2b worker phones work unchanged; a new average makes a new `rev` through the existing fingerprint.
+- Manager screen: figure being sent, mined this week (Mon–Sun) and last week, day entry (TODAY / YESTERDAY buttons, UGX, note), CONVERT WITH MY RATE (coin + amount x the manager's current rate -> UGX, to be checked then saved), list of the 14 newest days with SHOW SPLIT (pool, manager, each worker with `TeamMath.distribute` and TODAY'S shares, labelled estimate), EDIT, DELETE. The old typed field is now labelled a fallback.
+- Limits: the amounts are typed by the manager (the app cannot see what was mined); the split per past day uses today's shares, not the shares of that day; nothing here is a payment or a promise.
+- Not compile-tested (no Kotlin/Gradle in the sandbox). Brace balance, the migration SQL and the 7-day window logic were checked. If Actions fails, paste the error log.
 
+## Next: T3b then T3c (planned, decided with the owner)
+**T3b — weekly hash goal + rig ledger** (zip `piece-08t3b-...`, DB v11, one migration): tables `team_goals` (weekKey Monday PK, target hash rate as exact text + unit such as TH/s, note, setBy, setAt) and `team_rigs` (id, name, hash rate text + unit, costUgx, boughtAt, fundedNote, status ACTIVE|SOLD|BROKEN, soldAt, setBy; every change in the audit log). Capacity = sum of ACTIVE rigs (same unit; mixing units is refused). Progress = capacity / target. Manager screen section(s) in Team mining. TEAM_VIEW gets OPTIONAL fields (`gt` target, `gu` unit, `cap` capacity, `gw` week key, `gn` note); worker card shows a progress bar and replaces the "capacity is not built" sentence from T2b. When the goal is reached: celebration line + top contributors (names only, from the manager's consent switch `team:showTop`, default OFF).
+**T3c — gifts** (zip `piece-08t3c-...`, DB v12): table `team_gifts` (id, workerId, kind MULTIPLIER|FIXED, multiplier text e.g. 1.10 [allowed 1.01..3.00] or fixedUgx, fromDay, toDay, reason REQUIRED 5+ chars, createdBy/At, voidedAt/By). A multiplier changes the worker's expected DAILY payout estimate for the period only (never the contributions or the share), a fixed gift is a one-time extra UGX figure; both go to the worker in TEAM_VIEW as optional `gf[]` and are shown as "Gift from the manager: reason". Audit log for create and void. Honest labels: gifts are discretionary and not promised.
+After T3: T4 (leaderboard, levels, streaks, badges, weekly summary), then Piece 9 (Telegram), 10, 11, 12.
 
 ## Build-fix note (8B)
 The 8B build failed with `Redeclaration: PickedFile`: `ui/WorkerSubmit.kt` (screenshot picker, 4C2/6) and `ui/NcScreens.kt` (statement file, 8B) both declared a public top-level class `PickedFile` in package `com.ctteam.app.ui`. Fix zip `piece-08b-z-fix-pickedfile.zip` (sorts after `piece-08b-nc-statements.zip`) replaces `WorkerSubmit.kt` (class renamed `PickedProof`) and bumps the version to 20 / 0.19.1. RULE for later pieces: every public top-level name in `ui/` and `data/` must be unique in the package; prefix names or make them `private`.
@@ -449,3 +471,56 @@ Decisions:
 - Extra ideas agreed: levels (Bronze..Diamond), streaks, badges, rank changes, rig ledger (what contributions bought), inactive-worker alerts for the manager, weekly summary per worker (Piece 9 sends it by Telegram), "what if I contribute X" calculator, honest labels (estimates only, no guaranteed returns).
 - Pieces: T1 data + formulas + rates (tables via ONE migration), T2 worker screens, T3 manager screens (mined amounts, hash goal, gifts, rig ledger), T4 leaderboard, levels, streaks, badges. Team figures reach worker phones as signed M2W updates (new type, same 5C style).
 - Legal/honesty note for the owner: workers pool real money and see payout figures; keep all numbers as estimates and keep records transparent; check Uganda rules on pooled investments.
+
+## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
+- `app/build.gradle.kts` — piece-08t3a-mined-days.zip
+- `app/src/main/AndroidManifest.xml` — piece-01-foundation.zip
+- `MainActivity.kt` — piece-03-manager.zip
+- `data/CTDatabase.kt` — piece-08t3a-mined-days.zip
+- `data/Daos.kt` — piece-08d-nc-matching.zip
+- `data/Entities.kt` — piece-08c-nc-claims.zip
+- `data/ManagerAccounts.kt` — piece-05e-manager-access.zip
+- `data/ManagerSync.kt` — piece-05e-manager-access.zip
+- `data/NcMatcher.kt` — piece-08d-nc-matching.zip
+- `data/NcRepository.kt` — piece-08t1-team-ledger.zip
+- `data/NcStatementParser.kt` — piece-08b-nc-statements.zip
+- `data/PayoutMatching.kt` — piece-07-payouts.zip
+- `data/PdfText.kt` — piece-08a-pdf-reader.zip
+- `data/ProofAnalyzer.kt` — piece-06-screenshot-verification.zip
+- `data/Repositories.kt` — piece-02-data.zip
+- `data/ScreenshotChecks.kt` — piece-06-screenshot-verification.zip
+- `data/Security.kt` — piece-04c2-worker-proof.zip
+- `data/ServiceLocator.kt` — piece-08t1-team-ledger.zip
+- `data/Sync.kt` — piece-08t2a-team-worker-sync.zip
+- `data/Team.kt` — piece-08t3a-mined-days.zip
+- `data/TeamWorker.kt` — piece-08t3a-mined-days.zip
+- `data/Util.kt` — piece-02-data.zip
+- `data/Verification.kt` — piece-06-screenshot-verification.zip
+- `ui/CTApp.kt` — piece-04a-managers-worker.zip
+- `ui/Components.kt` — piece-01-foundation.zip
+- `ui/Forms.kt` — piece-03-manager.zip
+- `ui/ManagerAccess.kt` — piece-05e-manager-access.zip
+- `ui/ManagerScreens.kt` — piece-08t1-team-ledger.zip
+- `ui/ManagerSyncScreens.kt` — piece-05e-manager-access.zip
+- `ui/NcMatchScreens.kt` — piece-08d-nc-matching.zip
+- `ui/NcScreens.kt` — piece-08d-nc-matching.zip
+- `ui/PayoutScreens.kt` — piece-08a-pdf-reader.zip
+- `ui/Screens.kt` — piece-03-manager.zip
+- `ui/SecurityScreens.kt` — piece-04c1-worker-tasks.zip
+- `ui/SyncScreens.kt` — piece-05d-x-reset-request.zip
+- `ui/TeamScreens.kt` — piece-08t3a-mined-days.zip
+- `ui/Theme.kt` — piece-01-foundation.zip
+- `ui/WorkerDemo.kt` — piece-08c-nc-claims.zip
+- `ui/WorkerHistory.kt` — piece-04c3-worker-history.zip
+- `ui/WorkerNcClaim.kt` — piece-08c-nc-claims.zip
+- `ui/WorkerPayout.kt` — piece-04c4-worker-payout.zip
+- `ui/WorkerScreens.kt` — piece-08t2a-team-worker-sync.zip
+- `ui/WorkerSubmit.kt` — piece-08b-z-fix-pickedfile.zip
+- `ui/WorkerTasks.kt` — piece-08c-nc-claims.zip
+- `ui/WorkerTeam.kt` — piece-08t2b-team-daily-whatif.zip
+- `app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml` — piece-01-foundation.zip
+- `app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml` — piece-01-foundation.zip
+- `app/src/main/res/values/colors.xml` — piece-01-foundation.zip
+- `app/src/main/res/values/themes.xml` — piece-01-foundation.zip
+- `build.gradle.kts` — piece-02-data.zip
+- `settings.gradle.kts` — piece-01-foundation.zip
