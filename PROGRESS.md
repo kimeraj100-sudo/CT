@@ -48,8 +48,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | T2b | Team mining: manager's daily mined estimate, expected daily payout, what-if calculator, team capacity totals | DONE in piece-08t2b-team-daily-whatif.zip (no DB change; build result: check Actions) |
 | T3a | Team mining: real daily mined amounts (DB v10), 7-day average replaces the typed estimate | DONE in piece-08t3a-mined-days.zip (app 26 / 0.25.0; build result: check Actions) |
 | T3b | Team mining: weekly hash goal + rig ledger (capacity), progress carried to workers | DONE in piece-08t3b-goal-rigs.zip (DB v11, app 27 / 0.26.0; build result: check Actions) |
-| T3c | Team mining: gifts (multiplier for a period or fixed extra payout, reason required) shown to the worker | NEXT |
-| T4 | Team mining: leaderboard, levels, streaks, badges, weekly summary | todo |
+| T3c | Team mining: gifts (multiplier for a period or fixed extra payout, reason required) shown to the worker | DONE in piece-08t3c-gifts.zip (DB v12, app 28 / 0.27.0; build result: check Actions) |
+| T4 | Team mining: leaderboard, levels, streaks, badges, weekly summary | NEXT |
 | 9 | Telegram bot, notifications, support chat | todo |
 | 10 | Learn & Earn, announcements | todo |
 | 11 | Backup / restore / migration | todo |
@@ -461,10 +461,21 @@ Files (zip: `piece-08t3b-goal-rigs.zip`, sorts after 08t3a and before piece-09; 
 - Limits: all figures are typed by the manager; the app cannot see machines or hash rate. A goal only counts the rigs in its own unit. Nothing here is a payment or a promise.
 - Not compile-tested (no Kotlin/Gradle in the sandbox). Brace balance and the migration SQL against the entity columns were checked, new public names were checked against the whole project. If Actions fails, paste the error log (reminder: Room/KSP generates Java, so no Kotlin parameter may be named with a Java keyword such as `new`).
 
-## Next: T3c (planned, decided with the owner)
+## Piece T3c — Gifts (what exists now)
+Files (zip: `piece-08t3c-gifts.zip`, sorts after 08t3b and before piece-09; app 28 / 0.27.0; DB v12 with `MIGRATION_11_12` = ONE new table): `data/TeamGifts.kt` (new), `ui/TeamGiftScreens.kt` (new), `data/CTDatabase.kt` (v12, `TeamGiftEntity`, `teamGiftDao()`), `data/ServiceLocator.kt` (`Repos.teamGifts`), `data/TeamWorker.kt` (optional `gf` in TEAM_VIEW, `TeamViewGift`, `TeamView.gifts`, `activeMultiplier`, `expectedDailyWithGiftUgx`), `ui/WorkerTeam.kt` (gift lines), `ui/TeamScreens.kt` (one line: `TeamGiftSection(repos, actor)` after the goal section), `app/build.gradle.kts`.
+- Table `team_gifts`: `id`, `workerId`, `kind` MULTIPLIER|FIXED (`GiftKind`), `multiplierText` (two decimals, e.g. 1.10), `fixedUgx`, `fromDay`/`toDay` (yyyy-MM-dd East Africa; same day for FIXED), `reason`, `createdBy`, `createdAt`, `voidedAt`, `voidedBy`; index on workerId.
+- Rules (`TeamGiftRepository`): reason REQUIRED, 5 to 160 characters. Multiplier 1.01 to 3.00; the period cannot start in the past, can start at most 60 days ahead, lasts at most 90 days; only ONE multiplier per worker at any time (an overlapping one is refused: void it first). Fixed gift 1 to 1,000,000,000 UGX, dated today. Only active workers. A gift is never deleted, only voided. Audit log: `TEAM_GIFT_GIVEN` (worker name, figures, reason) and `TEAM_GIFT_VOIDED`.
+- Effect: a multiplier changes ONLY the worker's expected DAILY payout estimate, only on the days of the gift (`expectedDailyUgx x multiplier`, rounded down, computed on the worker phone with the worker's East Africa date); contributions, shares and the team figures are never changed. A fixed gift is just a one-time extra figure shown as a gift.
+- TEAM_VIEW: optional `gf[]` of at most 10 objects (`id` "g<id>", `k` M|F, `m` or `f`, `a` first day, `b` last day, `r` reason, `at`), only THIS worker's gifts that are not voided and have not ended more than 7 days ago. The gift list is in the fingerprint, so giving, voiding or an old gift dropping out makes a new `rev` through the existing mechanism; a worker with only gifts still gets the message. On the worker phone each gift entry is validated separately (a broken one is skipped, the rest is used).
+- Worker card: "With the manager's gift (xM today): about UGX ..." when a multiplier is active, plus a "Gifts from the manager" list (what, status active/starts/ended, "Reason: ...") and the honest sentence that gifts are the manager's own choice, not promised, can be taken back and do not change the share.
+- Manager screen (Team mining): choose a worker (chips), Multiplier or Extra amount, fields, reason, GIVE GIFT, and the list of the 20 newest gifts with status (ACTIVE / UPCOMING / ENDED / GIVEN / VOIDED) and a two-tap VOID.
+- Limits: the multiplier is judged on the worker phone's date, so a wrong phone clock shows it early or late; amounts are estimates; nothing here pays anyone, the manager still pays by hand.
+- Not compile-tested (no Kotlin/Gradle in the sandbox). Brace balance and the migration SQL against the entity columns were checked, new public names were checked against the whole project. If Actions fails, paste the error log.
+
+## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
-**T3c — gifts** (zip `piece-08t3c-...`, DB v12): table `team_gifts` (id, workerId, kind MULTIPLIER|FIXED, multiplier text e.g. 1.10 [allowed 1.01..3.00] or fixedUgx, fromDay, toDay, reason REQUIRED 5+ chars, createdBy/At, voidedAt/By). A multiplier changes the worker's expected DAILY payout estimate for the period only (never the contributions or the share), a fixed gift is a one-time extra UGX figure; both go to the worker in TEAM_VIEW as optional `gf[]` and are shown as "Gift from the manager: reason". Audit log for create and void. Honest labels: gifts are discretionary and not promised.
-After T3c: T4 (leaderboard, levels, streaks, badges, weekly summary), then Piece 9 (Telegram), 10, 11, 12.
+**T3c — DONE** (see "Piece T3c" below).
+After T3: T4 (leaderboard, levels, streaks, badges, weekly summary), then Piece 9 (Telegram), 10, 11, 12.
 
 ## Build-fix note (8B)
 The 8B build failed with `Redeclaration: PickedFile`: `ui/WorkerSubmit.kt` (screenshot picker, 4C2/6) and `ui/NcScreens.kt` (statement file, 8B) both declared a public top-level class `PickedFile` in package `com.ctteam.app.ui`. Fix zip `piece-08b-z-fix-pickedfile.zip` (sorts after `piece-08b-nc-statements.zip`) replaces `WorkerSubmit.kt` (class renamed `PickedProof`) and bumps the version to 20 / 0.19.1. RULE for later pieces: every public top-level name in `ui/` and `data/` must be unique in the package; prefix names or make them `private`.
@@ -484,10 +495,10 @@ Decisions:
 - Legal/honesty note for the owner: workers pool real money and see payout figures; keep all numbers as estimates and keep records transparent; check Uganda rules on pooled investments.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-08t3b-goal-rigs.zip
+- `app/build.gradle.kts` — piece-08t3c-gifts.zip
 - `app/src/main/AndroidManifest.xml` — piece-01-foundation.zip
 - `MainActivity.kt` — piece-03-manager.zip
-- `data/CTDatabase.kt` — piece-08t3b-goal-rigs.zip
+- `data/CTDatabase.kt` — piece-08t3c-gifts.zip
 - `data/Daos.kt` — piece-08d-nc-matching.zip
 - `data/Entities.kt` — piece-08c-nc-claims.zip
 - `data/ManagerAccounts.kt` — piece-05e-manager-access.zip
@@ -501,11 +512,12 @@ Decisions:
 - `data/Repositories.kt` — piece-02-data.zip
 - `data/ScreenshotChecks.kt` — piece-06-screenshot-verification.zip
 - `data/Security.kt` — piece-04c2-worker-proof.zip
-- `data/ServiceLocator.kt` — piece-08t3b-goal-rigs.zip
+- `data/ServiceLocator.kt` — piece-08t3c-gifts.zip
 - `data/Sync.kt` — piece-08t2a-team-worker-sync.zip
 - `data/Team.kt` — piece-08t3a-mined-days.zip
+- `data/TeamGifts.kt` — piece-08t3c-gifts.zip
 - `data/TeamGoals.kt` — piece-08t3b-goal-rigs.zip
-- `data/TeamWorker.kt` — piece-08t3b-goal-rigs.zip
+- `data/TeamWorker.kt` — piece-08t3c-gifts.zip
 - `data/Util.kt` — piece-02-data.zip
 - `data/Verification.kt` — piece-06-screenshot-verification.zip
 - `ui/CTApp.kt` — piece-04a-managers-worker.zip
@@ -520,8 +532,9 @@ Decisions:
 - `ui/Screens.kt` — piece-03-manager.zip
 - `ui/SecurityScreens.kt` — piece-04c1-worker-tasks.zip
 - `ui/SyncScreens.kt` — piece-05d-x-reset-request.zip
+- `ui/TeamGiftScreens.kt` — piece-08t3c-gifts.zip
 - `ui/TeamGoalScreens.kt` — piece-08t3b-goal-rigs.zip
-- `ui/TeamScreens.kt` — piece-08t3b-goal-rigs.zip
+- `ui/TeamScreens.kt` — piece-08t3c-gifts.zip
 - `ui/Theme.kt` — piece-01-foundation.zip
 - `ui/WorkerDemo.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerHistory.kt` — piece-04c3-worker-history.zip
@@ -530,7 +543,7 @@ Decisions:
 - `ui/WorkerScreens.kt` — piece-08t2a-team-worker-sync.zip
 - `ui/WorkerSubmit.kt` — piece-08b-z-fix-pickedfile.zip
 - `ui/WorkerTasks.kt` — piece-08c-nc-claims.zip
-- `ui/WorkerTeam.kt` — piece-08t3b-goal-rigs.zip
+- `ui/WorkerTeam.kt` — piece-08t3c-gifts.zip
 - `app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml` — piece-01-foundation.zip
 - `app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml` — piece-01-foundation.zip
 - `app/src/main/res/values/colors.xml` — piece-01-foundation.zip
