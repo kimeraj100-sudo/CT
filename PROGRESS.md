@@ -49,8 +49,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | T3a | Team mining: real daily mined amounts (DB v10), 7-day average replaces the typed estimate | DONE in piece-08t3a-mined-days.zip (app 26 / 0.25.0; build result: check Actions) |
 | T3b | Team mining: weekly hash goal + rig ledger (capacity), progress carried to workers | DONE in piece-08t3b-goal-rigs.zip (DB v11, app 27 / 0.26.0; build result: check Actions) |
 | T3c | Team mining: gifts (multiplier for a period or fixed extra payout, reason required) shown to the worker | DONE in piece-08t3c-gifts.zip (DB v12, app 28 / 0.27.0; build result: check Actions) |
-| T4 | Team mining: leaderboard, levels, streaks, badges, weekly summary | NEXT |
-| 9 | Telegram bot, notifications, support chat | todo |
+| T4 | Team mining: leaderboard, levels, streaks, badges, quiet-worker list, weekly summary | DONE in piece-08t4-leaderboard.zip (no DB change, app 29 / 0.28.0; build result: check Actions) |
+| 9 | Telegram bot, notifications, support chat | NEXT |
 | 10 | Learn & Earn, announcements | todo |
 | 11 | Backup / restore / migration | todo |
 | 12 | Premium polish & animations | todo |
@@ -472,6 +472,16 @@ Files (zip: `piece-08t3c-gifts.zip`, sorts after 08t3b and before piece-09; app 
 - Limits: the multiplier is judged on the worker phone's date, so a wrong phone clock shows it early or late; amounts are estimates; nothing here pays anyone, the manager still pays by hand.
 - Not compile-tested (no Kotlin/Gradle in the sandbox). Brace balance and the migration SQL against the entity columns were checked, new public names were checked against the whole project. If Actions fails, paste the error log.
 
+## Piece T4 — Levels, rank, streaks, badges, leaderboard, quiet workers, weekly summary (what exists now)
+Files (zip: `piece-08t4-leaderboard.zip`, sorts after 08t3c and before piece-09; app 29 / 0.28.0; NO database change): `data/TeamBoard.kt` (new: `TeamLevels`, `TeamStreaks`, `TeamBadges`/`Badge`/`BadgeInput`, `BoardRow`, `QuietRow`, `TeamBoardRepository`), `ui/WorkerTeamBoard.kt` (new: `WorkerTeamBoardCard`, `TeamBoardContent`), `ui/TeamBoardScreens.kt` (new: `TeamBoardSection`), `data/TeamWorker.kt` (replaced), `data/ServiceLocator.kt` (`Repos.teamBoard`), `ui/TeamScreens.kt` (one line: `TeamBoardSection` after the gift section), `ui/WorkerScreens.kt` (card in the real home + demo), `ui/WorkerDemo.kt` (`teamView()` made-up figures), `app/build.gradle.kts`.
+- Levels follow the ALL-TIME verified deposits (UGX value fixed at verification), so a level never goes down: Starter 0, Bronze from 1, Silver 100,000, Gold 500,000, Platinum 2,000,000, Diamond 10,000,000 (constants in `TeamLevels.ALL`).
+- Streaks: deposit weeks in a row (Mon–Sun, East Africa; the current week may still be empty without breaking the streak) and approved-task days in a row. Both are computed ON THE WORKER PHONE from the team figures it already has and its own submissions.
+- Badges (15, `TeamBadges.ALL`): first deposit, five deposits, Silver/Gold/Platinum/Diamond, 4 and 12 weeks in a row, 7 task days, 30 and 100 tasks, Top 3, Rising, Goal week, Gift. Locked badges show 🔒; tapping one shows how to get it.
+- TEAM_VIEW got two OPTIONAL fields (old phones ignore them, new phones accept old messages): `rk` = my rank (by share, 1-based, only if I have a priced active deposit) and `lb[]` = top 5 `{nm, lv}` (first name + last initial + level index) ONLY if the manager switched it on (`meta` `team:showBoard`, default OFF, audit `TEAM_SHOW_BOARD_CHANGED`). Rank and board are in the fingerprint, so a change makes a new `rev`; ranks move only when the ORDER changes, so the daily decay alone does not create new revs. The worker phone remembers the previous rank (`prk` in the stored JSON) to show ▲/▼.
+- Worker card "My level, streaks and badges": level + progress bar, rank + movement, two streak tiles, badge grid, "My weeks" (this week / last week: approved tasks with UGX, verified deposits with UGX), the top 5 when allowed. Honest wording: motivation only, estimates, no promise of payment.
+- Manager (Team mining, new card): ranking (rank, name, level, share, all-time, deposits, 🔥 week streak, last deposit), the consent switch, QUIET WORKERS (active workers with no proof for 7 days, or no verified deposit for 4 weeks, or never), and WEEKLY SUMMARY TEXT per worker (last Mon–Sun: tasks approved + UGX, rejected/pending, deposits + UGX, level, rank + share, streak, team goal %) with COPY and SHARE (Android share sheet). Nothing is sent by the app; Piece 9 can send these by Telegram.
+- Limits: rank/level figures reach a worker only with the manager's next update; the worker's deposit count uses the 40 newest deposits plus `more`; the "Rising" badge needs two updates with different ranks. Not compile-tested (no Kotlin/Gradle in the sandbox); brace balance and public-name uniqueness were checked. If Actions fails, paste the error log.
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
@@ -495,7 +505,7 @@ Decisions:
 - Legal/honesty note for the owner: workers pool real money and see payout figures; keep all numbers as estimates and keep records transparent; check Uganda rules on pooled investments.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-08t3c-gifts.zip
+- `app/build.gradle.kts` — piece-08t4-leaderboard.zip
 - `app/src/main/AndroidManifest.xml` — piece-01-foundation.zip
 - `MainActivity.kt` — piece-03-manager.zip
 - `data/CTDatabase.kt` — piece-08t3c-gifts.zip
@@ -512,12 +522,15 @@ Decisions:
 - `data/Repositories.kt` — piece-02-data.zip
 - `data/ScreenshotChecks.kt` — piece-06-screenshot-verification.zip
 - `data/Security.kt` — piece-04c2-worker-proof.zip
-- `data/ServiceLocator.kt` — piece-08t3c-gifts.zip
+- `data/ServiceLocator.kt` — piece-08t4-leaderboard.zip
 - `data/Sync.kt` — piece-08t2a-team-worker-sync.zip
 - `data/Team.kt` — piece-08t3a-mined-days.zip
+- `data/TeamBoard.kt` — piece-08t4-leaderboard.zip
+- `ui/TeamBoardScreens.kt` — piece-08t4-leaderboard.zip
+- `ui/WorkerTeamBoard.kt` — piece-08t4-leaderboard.zip
 - `data/TeamGifts.kt` — piece-08t3c-gifts.zip
 - `data/TeamGoals.kt` — piece-08t3b-goal-rigs.zip
-- `data/TeamWorker.kt` — piece-08t3c-gifts.zip
+- `data/TeamWorker.kt` — piece-08t4-leaderboard.zip
 - `data/Util.kt` — piece-02-data.zip
 - `data/Verification.kt` — piece-06-screenshot-verification.zip
 - `ui/CTApp.kt` — piece-04a-managers-worker.zip
@@ -534,13 +547,13 @@ Decisions:
 - `ui/SyncScreens.kt` — piece-05d-x-reset-request.zip
 - `ui/TeamGiftScreens.kt` — piece-08t3c-gifts.zip
 - `ui/TeamGoalScreens.kt` — piece-08t3b-goal-rigs.zip
-- `ui/TeamScreens.kt` — piece-08t3c-gifts.zip
+- `ui/TeamScreens.kt` — piece-08t4-leaderboard.zip
 - `ui/Theme.kt` — piece-01-foundation.zip
-- `ui/WorkerDemo.kt` — piece-08c-nc-claims.zip
+- `ui/WorkerDemo.kt` — piece-08t4-leaderboard.zip
 - `ui/WorkerHistory.kt` — piece-04c3-worker-history.zip
 - `ui/WorkerNcClaim.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerPayout.kt` — piece-04c4-worker-payout.zip
-- `ui/WorkerScreens.kt` — piece-08t2a-team-worker-sync.zip
+- `ui/WorkerScreens.kt` — piece-08t4-leaderboard.zip
 - `ui/WorkerSubmit.kt` — piece-08b-z-fix-pickedfile.zip
 - `ui/WorkerTasks.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerTeam.kt` — piece-08t3c-gifts.zip
@@ -550,3 +563,6 @@ Decisions:
 - `app/src/main/res/values/themes.xml` — piece-01-foundation.zip
 - `build.gradle.kts` — piece-02-data.zip
 - `settings.gradle.kts` — piece-01-foundation.zip
+
+## Idea parked (owner, to confirm later)
+The CT mining pool may have a website with public stats. If it does, a later piece can read the daily mined amount from it (needs internet permission, Piece 9). The manager would still confirm every figure. Pool bot messages on Telegram: bots cannot read other bots, so use share/paste or forwarding to our own bot (send 2–3 sample messages so a reader can be written).
