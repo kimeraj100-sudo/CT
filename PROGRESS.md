@@ -44,7 +44,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 8C | Worker BNB claim entry + signed NC_CLAIM report to the manager | DONE in piece-08c-nc-claims.zip (DB v8; build result: check Actions) |
 | 8D | Matching engine (coin + exact amount + about 2 min, strict one-to-one), manual override, link to Review, NC_VERIFIED update to the worker | DONE in piece-08d-nc-matching.zip (build result: check Actions) |
 | T1 | Team mining: contributions ledger, decayed shares, 70/30 split, UGX rates | DONE in piece-08t1-team-ledger.zip (DB v9; build result: check Actions) |
-| T2 | Team mining: worker view (capacity, my share, expected daily payout, what-if) | NEXT |
+| T2a | Team mining: signed TEAM_VIEW update to the worker + worker "Team mining" card (my share, contributed, team totals, my contributions) | DONE in piece-08t2a-team-worker-sync.zip (no DB change; build result: check Actions) |
+| T2b | Team mining: expected daily payout (manager's daily mined estimate), "what if I contribute X" calculator, team capacity | NEXT |
 | T3 | Team mining: manager (mined amounts, weekly hash goal, gifts, rig ledger) | todo |
 | T4 | Team mining: leaderboard, levels, streaks, badges, weekly summary | todo |
 | 9 | Telegram bot, notifications, support chat | todo |
@@ -419,6 +420,24 @@ ZIP NAMING RULE for the next team pieces: use `piece-08t2-...`, `piece-08t3-...`
 - Screen Manager > Team mining: settings, rates (latest per coin + history, "set by the manager on <date>"), unpriced banner, shares per worker (percent, all-time contributed, counts towards share, number of contributions), team totals, split calculator (type a mined UGX amount, see pool / manager / each worker, labelled ESTIMATE), contribution ledger (newest 60) with the rate used and the void/restore buttons. Honest wording everywhere: estimates, rates typed by the manager, no promise of payment.
 - NOT in T1 (by plan): daily mined amounts, weekly hash goal, gifts, rig ledger (T3 adds their tables with its own migration v10); worker screens and the signed M2W update that carries team figures to worker phones (T2, new type in the 5C style); leaderboard, levels, streaks, badges (T4).
 - Known limit: shares are computed on the MANAGER phone only (it holds the claims and statement rows); workers will see them after a T2 update. Not compile-tested (no Kotlin/Gradle in the sandbox). If Actions fails, paste the error log (reminder: Room/KSP generates Java, so never name a Kotlin parameter with a Java keyword such as `new`).
+
+## Piece T2a — Team mining: figures reach the worker (what exists now)
+Files (zip: `piece-08t2a-team-worker-sync.zip`, sorts after `piece-08t1-...` and before `piece-09-...`): `data/TeamWorker.kt` (new), `data/Sync.kt` (replaced), `ui/WorkerTeam.kt` (new), `ui/WorkerScreens.kt` (replaced: one line, `WorkerTeamCard` in the real home's bottom area), `app/build.gradle.kts` (24 / 0.23.0). NO schema change (DB stays v9); the figures live in the `meta` table.
+- New M2W message type `TEAM_VIEW` (`SyncRepository.TYPE_TEAM_VIEW`, in `WORKER_TYPES`). `collectUpdateItems` adds it through `TeamViewCodec.build(db, workerId)`; it is part of the normal update (Sync > worker > MAKE UPDATE). Outbox key `TV:<worker>:<rev>`.
+- Body (all ESTIMATES): `rev`, `at` (time made), `hl` half-life days, `pp` workers' percent, `n` contributors, `ta` team all-time UGX, `tw` team weight after decay, `mw`/`ma` this worker's weight / all-time UGX, `ct[]` this worker's own contributions (newest 40: id, coin, amount text, deposit time, rate text, status ACTIVE/VOIDED, value, void note), `more`. Nothing about other workers except the team totals.
+- `rev` rises only when the ledger changed (fingerprint of settings + active contribution ids/values + this worker's rows + the week start) or a new Monday began, so the same ledger gives byte-identical messages (re-sending is harmless) and a weekly refresh happens by itself at the next MAKE UPDATE. Manager-side counters in `meta`: `team:vfp:<worker>`, `team:vrev:<worker>`, `team:vat:<worker>`. Weights are computed at `at`.
+- Worker phone: `TeamViewCodec.apply` re-validates every field, ignores `rev` not newer than `teamview:rev:<worker>`, stores the cleaned JSON in `teamview:json:<worker>`. `TeamViewCodec.load` -> `TeamView` (`share`, `sharePercentText()`, `contributions`, `moreCount`). `WorkerTeamCard` re-reads every 4 s so the card updates right after the update is pasted. Hidden in demo mode (the card is only in the real home).
+- Wording on screen: share is an estimate, older contributions count less (half-life), split percent, rates are the manager's, not a promise of payment.
+- Public names added: `TeamView`, `TeamViewContribution`, `TeamViewApply`, `TeamViewCodec`, `WorkerTeamCard`. Nothing existing was renamed.
+- Limits: figures reach a worker only with an update (no live view); the manager phone is the only place shares are computed. Not compile-tested (no Kotlin/Gradle in the sandbox). If Actions fails, paste the error log.
+
+### Next: T2b (worker view, second half)
+1. Manager setting "team's estimated mined UGX per day" (`meta` key `team:dailyMinedUgx`, audit-logged setter in `TeamRepository`, field in `ui/TeamScreens.kt`); put it into the TEAM_VIEW body as `md` (and include it in the fingerprint so a change makes a new `rev`). T3 will later replace this single number with the real daily mined amounts.
+2. Worker card: expected daily payout = floor-distributed pool x share (`TeamMath.split` + share), labelled ESTIMATE; if `md` is missing say the manager has not entered one.
+3. "What if I contribute X UGX today": new share = (myWeight + X) / (teamWeight + X) and the new daily estimate, computed on the worker phone from the message (no network).
+4. Team capacity: show team all-time contributed and contributors now; hash-rate capacity needs T3's rig ledger, so T2b only reserves the line.
+5. Bump version to 25 / 0.24.0; zip name `piece-08t2b-...`.
+
 
 ## Build-fix note (8B)
 The 8B build failed with `Redeclaration: PickedFile`: `ui/WorkerSubmit.kt` (screenshot picker, 4C2/6) and `ui/NcScreens.kt` (statement file, 8B) both declared a public top-level class `PickedFile` in package `com.ctteam.app.ui`. Fix zip `piece-08b-z-fix-pickedfile.zip` (sorts after `piece-08b-nc-statements.zip`) replaces `WorkerSubmit.kt` (class renamed `PickedProof`) and bumps the version to 20 / 0.19.1. RULE for later pieces: every public top-level name in `ui/` and `data/` must be unique in the package; prefix names or make them `private`.
