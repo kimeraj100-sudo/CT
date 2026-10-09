@@ -44,9 +44,9 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 8C | Worker BNB claim entry + signed NC_CLAIM report to the manager | DONE in piece-08c-nc-claims.zip (DB v8; build result: check Actions) |
 | 8D | Matching engine (coin + exact amount + about 2 min, strict one-to-one), manual override, link to Review, NC_VERIFIED update to the worker | DONE in piece-08d-nc-matching.zip (build result: check Actions) |
 | T1 | Team mining: contributions ledger, decayed shares, 70/30 split, UGX rates | DONE in piece-08t1-team-ledger.zip (DB v9; build result: check Actions) |
-| T2a | Team mining: signed TEAM_VIEW update to the worker + worker "Team mining" card (my share, contributed, team totals, my contributions) | DONE in piece-08t2a-team-worker-sync.zip (no DB change; build result: check Actions) |
-| T2b | Team mining: expected daily payout (manager's daily mined estimate), "what if I contribute X" calculator, team capacity | NEXT |
-| T3 | Team mining: manager (mined amounts, weekly hash goal, gifts, rig ledger) | todo |
+| T2a | Team mining: signed TEAM_VIEW update to the worker + worker "Team mining" card | DONE in piece-08t2a-team-worker-sync.zip (build result: check Actions) |
+| T2b | Team mining: manager's daily mined estimate, expected daily payout, what-if calculator, team capacity totals | DONE in piece-08t2b-team-daily-whatif.zip (no DB change; build result: check Actions) |
+| T3 | Team mining: manager (mined amounts, weekly hash goal, gifts, rig ledger) | NEXT |
 | T4 | Team mining: leaderboard, levels, streaks, badges, weekly summary | todo |
 | 9 | Telegram bot, notifications, support chat | todo |
 | 10 | Learn & Earn, announcements | todo |
@@ -421,22 +421,16 @@ ZIP NAMING RULE for the next team pieces: use `piece-08t2-...`, `piece-08t3-...`
 - NOT in T1 (by plan): daily mined amounts, weekly hash goal, gifts, rig ledger (T3 adds their tables with its own migration v10); worker screens and the signed M2W update that carries team figures to worker phones (T2, new type in the 5C style); leaderboard, levels, streaks, badges (T4).
 - Known limit: shares are computed on the MANAGER phone only (it holds the claims and statement rows); workers will see them after a T2 update. Not compile-tested (no Kotlin/Gradle in the sandbox). If Actions fails, paste the error log (reminder: Room/KSP generates Java, so never name a Kotlin parameter with a Java keyword such as `new`).
 
-## Piece T2a — Team mining: figures reach the worker (what exists now)
-Files (zip: `piece-08t2a-team-worker-sync.zip`, sorts after `piece-08t1-...` and before `piece-09-...`): `data/TeamWorker.kt` (new), `data/Sync.kt` (replaced), `ui/WorkerTeam.kt` (new), `ui/WorkerScreens.kt` (replaced: one line, `WorkerTeamCard` in the real home's bottom area), `app/build.gradle.kts` (24 / 0.23.0). NO schema change (DB stays v9); the figures live in the `meta` table.
-- New M2W message type `TEAM_VIEW` (`SyncRepository.TYPE_TEAM_VIEW`, in `WORKER_TYPES`). `collectUpdateItems` adds it through `TeamViewCodec.build(db, workerId)`; it is part of the normal update (Sync > worker > MAKE UPDATE). Outbox key `TV:<worker>:<rev>`.
-- Body (all ESTIMATES): `rev`, `at` (time made), `hl` half-life days, `pp` workers' percent, `n` contributors, `ta` team all-time UGX, `tw` team weight after decay, `mw`/`ma` this worker's weight / all-time UGX, `ct[]` this worker's own contributions (newest 40: id, coin, amount text, deposit time, rate text, status ACTIVE/VOIDED, value, void note), `more`. Nothing about other workers except the team totals.
-- `rev` rises only when the ledger changed (fingerprint of settings + active contribution ids/values + this worker's rows + the week start) or a new Monday began, so the same ledger gives byte-identical messages (re-sending is harmless) and a weekly refresh happens by itself at the next MAKE UPDATE. Manager-side counters in `meta`: `team:vfp:<worker>`, `team:vrev:<worker>`, `team:vat:<worker>`. Weights are computed at `at`.
-- Worker phone: `TeamViewCodec.apply` re-validates every field, ignores `rev` not newer than `teamview:rev:<worker>`, stores the cleaned JSON in `teamview:json:<worker>`. `TeamViewCodec.load` -> `TeamView` (`share`, `sharePercentText()`, `contributions`, `moreCount`). `WorkerTeamCard` re-reads every 4 s so the card updates right after the update is pasted. Hidden in demo mode (the card is only in the real home).
-- Wording on screen: share is an estimate, older contributions count less (half-life), split percent, rates are the manager's, not a promise of payment.
-- Public names added: `TeamView`, `TeamViewContribution`, `TeamViewApply`, `TeamViewCodec`, `WorkerTeamCard`. Nothing existing was renamed.
-- Limits: figures reach a worker only with an update (no live view); the manager phone is the only place shares are computed. Not compile-tested (no Kotlin/Gradle in the sandbox). If Actions fails, paste the error log.
+## Piece T2a + T2b — Team mining worker view (what exists now)
+T2a (`piece-08t2a-team-worker-sync.zip`): `data/TeamWorker.kt`, `data/Sync.kt` (new M2W type `TEAM_VIEW`, part of the normal worker update; outbox key `TV:<worker>:<rev>`), `ui/WorkerTeam.kt` (`WorkerTeamCard`, in the real worker home only), `ui/WorkerScreens.kt` (one line). Body: rev, at, hl, pp, n, ta, tw, mw, ma, ct[] (this worker's 40 newest contributions), more. `rev` rises only when the ledger/settings changed or a new Monday began; same ledger = byte-identical message. Worker keeps the newest in `meta` (`teamview:json:<worker>`, `teamview:rev:<worker>`); manager counters `team:vfp/vrev/vat:<worker>`. No schema change.
+T2b (`piece-08t2b-team-daily-whatif.zip`, after T2a; app 25 / 0.24.0, still DB v9): `data/Team.kt` (`TeamRepository.dailyMinedUgx()`, `setDailyMined(ugx|null, actor)`, `meta` key `team:dailyMinedUgx`, audit `TEAM_DAILY_MINED_CHANGED`, constant `KEY_DAILY_MINED`), `ui/TeamScreens.kt` (Settings card: "Team's estimated mined amount per day in UGX", empty = none), `data/TeamWorker.kt` (optional `md` in the message and in the fingerprint, so changing it makes a new `rev`; `TeamView.dailyMinedUgx`, `dailyPoolUgx()`, `expectedDailyUgx()` = floor(pool x share), `shareIfAdded(x)`, `expectedDailyIfAdded(x)`), `ui/WorkerTeam.kt` (expected payout per day, "What if I contribute more?", team capacity totals).
+- Pool = `TeamMath.split(md, poolPercent).workersPoolUgx`; worker estimate = floor(pool x share) (the worker phone knows only its own share, so parts may not add up exactly; the manager's calculator uses largest-remainder).
+- What-if: share = (myWeight + X) / (teamWeight + X); assumes nobody else changes, ignores decay. Labelled estimate.
+- Capacity: only contributed totals and contributors. Hash-rate capacity and the weekly goal are NOT built (need T3's rig ledger); the card says so.
+- Not compile-tested. If Actions fails, paste the error log.
 
-### Next: T2b (worker view, second half)
-1. Manager setting "team's estimated mined UGX per day" (`meta` key `team:dailyMinedUgx`, audit-logged setter in `TeamRepository`, field in `ui/TeamScreens.kt`); put it into the TEAM_VIEW body as `md` (and include it in the fingerprint so a change makes a new `rev`). T3 will later replace this single number with the real daily mined amounts.
-2. Worker card: expected daily payout = floor-distributed pool x share (`TeamMath.split` + share), labelled ESTIMATE; if `md` is missing say the manager has not entered one.
-3. "What if I contribute X UGX today": new share = (myWeight + X) / (teamWeight + X) and the new daily estimate, computed on the worker phone from the message (no network).
-4. Team capacity: show team all-time contributed and contributors now; hash-rate capacity needs T3's rig ledger, so T2b only reserves the line.
-5. Bump version to 25 / 0.24.0; zip name `piece-08t2b-...`.
+## Next: T3 (manager: mined amounts, weekly hash goal, gifts, rig ledger)
+Replace the single daily estimate by real daily mined amounts (table, migration v10), weekly hash-rate goal with progress carried to workers in TEAM_VIEW, gifts (multiplier for a period or fixed extra payout, reason required, audit-logged, shown to the worker), rig ledger (what contributions bought; this gives the capacity figure). Zip name `piece-08t3-...`.
 
 
 ## Build-fix note (8B)
