@@ -50,7 +50,10 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | T3b | Team mining: weekly hash goal + rig ledger (capacity), progress carried to workers | DONE in piece-08t3b-goal-rigs.zip (DB v11, app 27 / 0.26.0; build result: check Actions) |
 | T3c | Team mining: gifts (multiplier for a period or fixed extra payout, reason required) shown to the worker | DONE in piece-08t3c-gifts.zip (DB v12, app 28 / 0.27.0; build result: check Actions) |
 | T4 | Team mining: leaderboard, levels, streaks, badges, quiet-worker list, weekly summary | DONE in piece-08t4-leaderboard.zip (no DB change, app 29 / 0.28.0; build result: check Actions) |
-| 9 | Telegram bot, notifications, support chat | NEXT |
+| 9A | Telegram, manager side: connect your own bot (token), read worker messages and text files while the manager area is open, auto-import (same checks as Sync), chat links, inbox for items needing a tap | DONE in piece-09a-telegram-reader.zip (DB v13, app 30 / 0.29.0; first use of the INTERNET permission; build result: check Actions) |
+| 9B | Telegram, manager -> worker: send updates, replies, announcements from the app to a worker's chat (no copy/paste); worker one-tap import of what arrives (share target) | NEXT |
+| 9C | Telegram: original screenshots as documents (worker sends, manager downloads, SHA-256 compared with the report) | todo |
+| 9D | Support chat (history in the app), weekly summaries and notifications by Telegram | todo |
 | 10 | Learn & Earn, announcements | todo |
 | 11 | Backup / restore / migration | todo |
 | 12 | Premium polish & animations | todo |
@@ -124,8 +127,8 @@ Notes for the next AI:
 Files (zip: `piece-04a-managers-worker.zip`):
 - `data/ManagerAccounts.kt` — table `manager_accounts` (up to 20): code name (stored UPPERCASE, unique), personal PIN (PBKDF2, 40 000 iterations, per-row salt), `isMain`, `suspendedUntil` (null / time / `Long.MAX_VALUE` = until re-enabled), `accessExpiresAt` (null / time). `ManagerAccountRepository`: `ensureMain`, `login(pin)` (PIN-only; PINs are unique), `blockReason`, `statusText`, `add`, `disable(durationMs|null)`, `allowFor(durationMs)`, `enableNow`, `setPin`, `rename`, `remove`. Only the main manager may call the change methods. Every action goes to the audit log with actor `manager:CODENAME`.
 - MAIN manager is seeded on first use with code name `MAIN` and PIN 114477, stored only as a salted hash (the PIN is not in the source as text). Main can change its own PIN and name in Manager > Managers > MAIN. The main manager can never be disabled or removed.
-- `data/CTDatabase.kt` — database version 2, `Migrations.MIGRATION_1_2` creates `manager_accounts`. The old `manager_identity` table (piece 3's single PIN) is kept but no longer used; it is NOT migrated, the old PIN stops working.
-- `data/ServiceLocator.kt` — `Repos.managerAccounts` added.
+- `data/CTDatabase.kt` — piece-09a-telegram-reader.zip
+- `data/ServiceLocator.kt` — piece-09a-telegram-reader.zip
 - `ui/ManagerAccess.kt` — `ManagerSession.actor`, `ManagerAccessGate` (PIN sign-in, 5 wrong = 30 s lock, shows the reason if blocked), `ManagersScreen` (main only: list with status, add, detail with Disable for period / Disable until re-enabled / Allow only for period / Enable now / rename / reset PIN / remove). Periods: hours, days, weeks, months (30 d), years (365 d), 1–1000.
 - `ui/ManagerScreens.kt` (replaced) — old PinGate removed; `ManagerArea` signs in with the new gate; a watchdog re-checks the signed-in manager every 5 s and signs them out when disabled; dashboard shows "Signed in as CODE" and a Managers card for the main manager; `ACTOR` now equals `ManagerSession.actor`.
 - `ui/WorkerScreens.kt` — `WorkerArea`: first time = registration (National ID, names, MTN/Airtel number, "number is in my own name" confirmation) via `WorkerRepository.register`; the worker id is remembered in `meta` key `WORKER_META_KEY`. Then `WorkerHomeScreen`: identity card, this-week expected payout (`SubmissionRepository.expectedForWeek`), pending/approved/rejected counts, change payout number (`changePhone`, once/week rule).
@@ -144,7 +147,7 @@ Files (zip: `piece-04b-security.zip`, sorts AFTER `piece-04a-managers-worker.zip
 - `ui/ManagerAccess.kt` (replaced) — `ManagerAccessGate` now uses `CredentialGate`; Managers screen: ADD MANAGER = code name + PIN length (6/8/10) -> app makes the PIN, shows it ONCE with a "copy message to send" button; manager detail has RESET TO DEFAULT (tap twice, new PIN shown once).
 - `ui/ManagerScreens.kt` (replaced) — route `MySecurity`, dashboard card "My security", watchdog also signs a manager out when `credVersion` changed (reset or credentials changed elsewhere).
 - `ui/WorkerScreens.kt` (replaced) — `WorkerArea` phases: Register -> (Setup for pre-4B workers) -> Gate -> Home; registration now also asks username, password, PIN; home shows username and a change PIN/password card; the "coming next" card now says Piece 4C.
-- `app/build.gradle.kts` — versionCode 5 / 0.5.0.
+- `app/build.gradle.kts` — piece-09a-telegram-reader.zip
 
 Rules implemented:
 - FULL sign-in = name (manager code name / worker username) + password + PIN. Needed first time on a phone and again every 30 days on that phone. QUICK unlock = only PIN OR only password, for 30 days after the last FULL sign-in on that phone (`device_trust`). Trust is void when `credVersion` changes (reset, password change, PIN change) or the manager taps "Forget this phone".
@@ -482,10 +485,21 @@ Files (zip: `piece-08t4-leaderboard.zip`, sorts after 08t3c and before piece-09;
 - Manager (Team mining, new card): ranking (rank, name, level, share, all-time, deposits, 🔥 week streak, last deposit), the consent switch, QUIET WORKERS (active workers with no proof for 7 days, or no verified deposit for 4 weeks, or never), and WEEKLY SUMMARY TEXT per worker (last Mon–Sun: tasks approved + UGX, rejected/pending, deposits + UGX, level, rank + share, streak, team goal %) with COPY and SHARE (Android share sheet). Nothing is sent by the app; Piece 9 can send these by Telegram.
 - Limits: rank/level figures reach a worker only with the manager's next update; the worker's deposit count uses the 40 newest deposits plus `more`; the "Rising" badge needs two updates with different ranks. Not compile-tested (no Kotlin/Gradle in the sandbox); brace balance and public-name uniqueness were checked. If Actions fails, paste the error log.
 
+## Piece 9A — Telegram, manager side (what exists now)
+Files (zip: `piece-09a-telegram-reader.zip`; sorts after `piece-08t4-leaderboard.zip` and before `piece-10-...`): `data/Telegram.kt` (new), `ui/TelegramScreens.kt` (new), `data/CTDatabase.kt` (v13, `MIGRATION_12_13`: tables `tg_chats`, `tg_inbox`), `data/ServiceLocator.kt` (`Repos.telegram`), `ui/ManagerScreens.kt` (route `MgrRoute.Telegram`, dashboard card "Telegram" with a badge for waiting items, the reading loop started after sign-in, `syncInitial`), `ui/SyncScreens.kt` (`ManagerSyncScreen(..., initialText: String? = null)` processes that text when opened), `app/src/main/AndroidManifest.xml` (adds `INTERNET`, the only change), `app/build.gradle.kts` (30 / 0.29.0).
+Design (no server, free): the manager makes a bot with @BotFather and pastes the token in Manager > Telegram. ONLY the manager phone holds the token. A worker puts a signed CT1 message into the bot's chat with the existing SHARE button (Telegram share target), or sends a `.txt`/`.ctt` file with it. The manager app long-polls `getUpdates` (25 s) while a manager is signed in; leaving the manager area stops the loop (`TelegramRepository.pollLoop`, one loop at a time through a Mutex; backs off 15 s after an error; PAUSE button).
+- `TelegramClient` — plain `HttpURLConnection` (no new library): `getMe`, `deleteWebhook` (run when the token is saved, because a webhook blocks getUpdates), `getUpdates`, `downloadFile` (getFile + download, size capped; bots can download up to 20 MB, text files are capped at 3 MB). Errors become words (401 bad token, 409 another reader or webhook, 429 slow down, no internet, timeout). The token is NEVER written to the audit log or shown again.
+- `TelegramRepository.connect/disconnect/setPaused/pollLoop`; settings in `meta`: `tg:token` (empty string = removed), `tg:bot`, `tg:offset` (saved after each update), `tg:paused`.
+- Each update: only PRIVATE chats; text or caption plus a text document are read; no `CT1.` -> ignored in silence (a file from an already linked chat is logged as FILE). Everything with `CT1.` goes through `SyncRepository.receiveAll(text, actor)` — identical rules to copy/paste (HMAC, replay protection, idempotent imports, manager approval for ENROLL and RESET_REQ). Results are stored in `tg_inbox`: ENROLL / RESET_REQ / HELD (worker not connected yet) = PENDING with the signed text kept; OK / FAIL / FILE = log rows (last ~300 kept). The same message sent twice makes one pending row. The screen's button "OPEN IN SYNC" calls `markHandled` (drops the stored text) and opens Sync with that text (`ManagerSyncScreen(initialText)`); the manager approves there exactly as before. If they leave without approving, the worker sends again (said on screen).
+- Chat links (`tg_chats`, one row per worker): set only when a NEW signed message from that worker was accepted (its seq is higher than anything seen before this paste, and the HMAC verifies). So a copied old message sent from another account cannot move a worker's chat. A changed chat is audited (`TG_CHAT_CHANGED`). Audit actions: `TG_CONNECTED`, `TG_DISCONNECTED`, `TG_PAUSED`, `TG_RESUMED`, `TG_CHAT_BOUND`. Used by 9B to send back.
+- Screen: connect steps, bot status (reading / paused / problem, last successful check), COPY THE BOT LINK, waiting items, linked chats, recent activity, honest limits.
+Limits: Telegram bot chats are not end-to-end encrypted (messages stay signed but readable by Telegram); the token is stored in the app database, not the Keystore (Piece 11 backups must encrypt it); only one program can read a bot; reading happens only while the manager area is open and Telegram keeps unread messages about 24 h; no background service yet (a later piece may add WorkManager). Workers must open the bot link once and press START before they can write to it. Nothing is sent TO workers yet (9B). Not compile-tested here (no Kotlin/Gradle in the sandbox); if Actions fails, paste the error log (Room/KSP rule: never use a Java keyword such as `new` as a parameter name).
+Plan for the rest: 9B sends M2W updates/replies/announcements to the linked chat (`sendMessage` for short codes, `sendDocument` of a `.txt` for long ones) and adds an Android share target so a worker taps a received file/message to import it into the app; 9C original screenshots (`sendDocument` from the worker, download on the manager phone, compare SHA-256 with the report, extend Piece 6 verdicts); 9D support chat, weekly summaries (T4 text) and notifications.
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
-After T3: T4 (leaderboard, levels, streaks, badges, weekly summary), then Piece 9 (Telegram), 10, 11, 12.
+T4 is done. Piece 9 (Telegram) is split 9A–9D (see below), then 10, 11, 12.
 
 ## Build-fix note (8B)
 The 8B build failed with `Redeclaration: PickedFile`: `ui/WorkerSubmit.kt` (screenshot picker, 4C2/6) and `ui/NcScreens.kt` (statement file, 8B) both declared a public top-level class `PickedFile` in package `com.ctteam.app.ui`. Fix zip `piece-08b-z-fix-pickedfile.zip` (sorts after `piece-08b-nc-statements.zip`) replaces `WorkerSubmit.kt` (class renamed `PickedProof`) and bumps the version to 20 / 0.19.1. RULE for later pieces: every public top-level name in `ui/` and `data/` must be unique in the package; prefix names or make them `private`.
@@ -506,7 +520,7 @@ Decisions:
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
 - `app/build.gradle.kts` — piece-08t4-leaderboard.zip
-- `app/src/main/AndroidManifest.xml` — piece-01-foundation.zip
+- `app/src/main/AndroidManifest.xml` — piece-09a-telegram-reader.zip
 - `MainActivity.kt` — piece-03-manager.zip
 - `data/CTDatabase.kt` — piece-08t3c-gifts.zip
 - `data/Daos.kt` — piece-08d-nc-matching.zip
@@ -524,6 +538,8 @@ Decisions:
 - `data/Security.kt` — piece-04c2-worker-proof.zip
 - `data/ServiceLocator.kt` — piece-08t4-leaderboard.zip
 - `data/Sync.kt` — piece-08t2a-team-worker-sync.zip
+- `data/Telegram.kt` — piece-09a-telegram-reader.zip
+- `ui/TelegramScreens.kt` — piece-09a-telegram-reader.zip
 - `data/Team.kt` — piece-08t3a-mined-days.zip
 - `data/TeamBoard.kt` — piece-08t4-leaderboard.zip
 - `ui/TeamBoardScreens.kt` — piece-08t4-leaderboard.zip
@@ -537,14 +553,14 @@ Decisions:
 - `ui/Components.kt` — piece-01-foundation.zip
 - `ui/Forms.kt` — piece-03-manager.zip
 - `ui/ManagerAccess.kt` — piece-05e-manager-access.zip
-- `ui/ManagerScreens.kt` — piece-08t1-team-ledger.zip
+- `ui/ManagerScreens.kt` — piece-09a-telegram-reader.zip
 - `ui/ManagerSyncScreens.kt` — piece-05e-manager-access.zip
 - `ui/NcMatchScreens.kt` — piece-08d-nc-matching.zip
 - `ui/NcScreens.kt` — piece-08d-nc-matching.zip
 - `ui/PayoutScreens.kt` — piece-08a-pdf-reader.zip
 - `ui/Screens.kt` — piece-03-manager.zip
 - `ui/SecurityScreens.kt` — piece-04c1-worker-tasks.zip
-- `ui/SyncScreens.kt` — piece-05d-x-reset-request.zip
+- `ui/SyncScreens.kt` — piece-09a-telegram-reader.zip
 - `ui/TeamGiftScreens.kt` — piece-08t3c-gifts.zip
 - `ui/TeamGoalScreens.kt` — piece-08t3b-goal-rigs.zip
 - `ui/TeamScreens.kt` — piece-08t4-leaderboard.zip
@@ -565,4 +581,4 @@ Decisions:
 - `settings.gradle.kts` — piece-01-foundation.zip
 
 ## Idea parked (owner, to confirm later)
-The CT mining pool may have a website with public stats. If it does, a later piece can read the daily mined amount from it (needs internet permission, Piece 9). The manager would still confirm every figure. Pool bot messages on Telegram: bots cannot read other bots, so use share/paste or forwarding to our own bot (send 2–3 sample messages so a reader can be written).
+The CT mining pool may have a website with public stats. If it does, a later piece can read the daily mined amount from it (needs internet permission, which Piece 9A added). The manager would still confirm every figure. Pool bot messages on Telegram: bots cannot read other bots, so use share/paste or forwarding to our own bot (send 2–3 sample messages so a reader can be written).
