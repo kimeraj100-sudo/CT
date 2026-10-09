@@ -47,8 +47,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | T2a | Team mining: signed TEAM_VIEW update to the worker + worker "Team mining" card | DONE in piece-08t2a-team-worker-sync.zip (build result: check Actions) |
 | T2b | Team mining: manager's daily mined estimate, expected daily payout, what-if calculator, team capacity totals | DONE in piece-08t2b-team-daily-whatif.zip (no DB change; build result: check Actions) |
 | T3a | Team mining: real daily mined amounts (DB v10), 7-day average replaces the typed estimate | DONE in piece-08t3a-mined-days.zip (app 26 / 0.25.0; build result: check Actions) |
-| T3b | Team mining: weekly hash goal + rig ledger (capacity), progress carried to workers | NEXT |
-| T3c | Team mining: gifts (multiplier for a period or fixed extra payout, reason required) shown to the worker | todo |
+| T3b | Team mining: weekly hash goal + rig ledger (capacity), progress carried to workers | DONE in piece-08t3b-goal-rigs.zip (DB v11, app 27 / 0.26.0; build result: check Actions) |
+| T3c | Team mining: gifts (multiplier for a period or fixed extra payout, reason required) shown to the worker | NEXT |
 | T4 | Team mining: leaderboard, levels, streaks, badges, weekly summary | todo |
 | 9 | Telegram bot, notifications, support chat | todo |
 | 10 | Learn & Earn, announcements | todo |
@@ -450,10 +450,21 @@ Files (zip: `piece-08t3a-mined-days.zip`, sorts after 08t2b; app 26 / 0.25.0; DB
 - Limits: the amounts are typed by the manager (the app cannot see what was mined); the split per past day uses today's shares, not the shares of that day; nothing here is a payment or a promise.
 - Not compile-tested (no Kotlin/Gradle in the sandbox). Brace balance, the migration SQL and the 7-day window logic were checked. If Actions fails, paste the error log.
 
-## Next: T3b then T3c (planned, decided with the owner)
-**T3b — weekly hash goal + rig ledger** (zip `piece-08t3b-...`, DB v11, one migration): tables `team_goals` (weekKey Monday PK, target hash rate as exact text + unit such as TH/s, note, setBy, setAt) and `team_rigs` (id, name, hash rate text + unit, costUgx, boughtAt, fundedNote, status ACTIVE|SOLD|BROKEN, soldAt, setBy; every change in the audit log). Capacity = sum of ACTIVE rigs (same unit; mixing units is refused). Progress = capacity / target. Manager screen section(s) in Team mining. TEAM_VIEW gets OPTIONAL fields (`gt` target, `gu` unit, `cap` capacity, `gw` week key, `gn` note); worker card shows a progress bar and replaces the "capacity is not built" sentence from T2b. When the goal is reached: celebration line + top contributors (names only, from the manager's consent switch `team:showTop`, default OFF).
+## Piece T3b — Weekly hash goal + rig ledger (what exists now)
+Files (zip: `piece-08t3b-goal-rigs.zip`, sorts after 08t3a and before piece-09; app 27 / 0.26.0; DB v11 with `MIGRATION_10_11` = TWO new tables, nothing existing touched): `data/TeamGoals.kt` (new), `ui/TeamGoalScreens.kt` (new), `data/CTDatabase.kt` (replaced: v11, entities `TeamGoalEntity`, `TeamRigEntity`, `teamGoalDao()`), `data/ServiceLocator.kt` (`Repos.teamGoals`), `data/TeamWorker.kt` (replaced: optional goal fields in TEAM_VIEW), `ui/WorkerTeam.kt` (replaced: progress bar), `ui/TeamScreens.kt` (replaced: one line, `TeamGoalSection(repos, actor)` inserted above the "Daily mined amounts" card), `app/build.gradle.kts`.
+- Tables: `team_goals` (`weekKey` = Monday date in East Africa, primary key; `targetText` exact decimal; `unit`; `note`; `setBy`; `setAt`) and `team_rigs` (`id`, `name`, `hashText` exact decimal, `unit`, `costUgx` nullable, `boughtAt`, `fundedNote`, `status` ACTIVE|SOLD|BROKEN, `soldAt` = when it stopped being active, `setBy`, `createdAt`; index on status). Units: `HashUnits.ALL` = H/s KH/s MH/s GH/s TH/s PH/s EH/s. Numbers: up to 12 digits and 6 decimals, more than zero (`TeamGoalMath.HASH_RULE`).
+- Rules (`TeamGoalRepository`): a goal is for ONE week given as its Monday; only this week or later (at most 8 weeks ahead); saving the same week again replaces it. Rigs are never deleted (status changes only; a broken rig can be made active again). ONE unit at a time: adding a rig, re-activating one, or setting a goal in a different unit than the ACTIVE rigs is refused with a clear message. Capacity = sum of ACTIVE rigs in the goal's unit (`TeamGoalMath.capacity`); progress = capacity / target (BigDecimal, 6 decimals). Audit log: `TEAM_GOAL_SET` (before -> after), `TEAM_GOAL_DELETED`, `TEAM_RIG_ADDED`, `TEAM_RIG_STATUS`, `TEAM_SHOW_TOP_CHANGED`.
+- Consent switch `meta` key `team:showTop` (default OFF): when ON and the goal is reached, the worker message carries the first name + last initial of the top 3 shares (names only, no amounts).
+- TEAM_VIEW (optional fields, old phones ignore them, new phones accept old messages): `gt` target, `gu` unit, `cap` capacity in that unit, `gw` week key, `gn` note, `tp` top names. The goal block is all-or-nothing on the worker phone (if `gt` is present, `gu`, `cap` and `gw` must be valid or the whole message is refused). The goal is part of the fingerprint, so any change (target, capacity, note, names) makes a new `rev` through the existing mechanism. A worker with no contributions still gets the message when a goal exists (before, no contributions meant no message).
+- Manager screen (Team mining): capacity now + progress bar of this week's goal, week choice (This week / Next week), target, unit chips, note, SAVE GOAL, list of goals with REMOVE (two taps), the top-contributors switch, the rig ledger (status buttons) and an add-rig form (name, hash rate, unit, cost, bought on, what paid for it).
+- Worker card (`WorkerTeamCard`): the "capacity will appear here" sentence is replaced by the weekly goal block: target, gold progress bar, capacity and percent, the note, and when reached a celebration line and the top names if the manager allowed them. Without a goal it says the manager has not set one.
+- Limits: all figures are typed by the manager; the app cannot see machines or hash rate. A goal only counts the rigs in its own unit. Nothing here is a payment or a promise.
+- Not compile-tested (no Kotlin/Gradle in the sandbox). Brace balance and the migration SQL against the entity columns were checked, new public names were checked against the whole project. If Actions fails, paste the error log (reminder: Room/KSP generates Java, so no Kotlin parameter may be named with a Java keyword such as `new`).
+
+## Next: T3c (planned, decided with the owner)
+**T3b — DONE** (see "Piece T3b" below).
 **T3c — gifts** (zip `piece-08t3c-...`, DB v12): table `team_gifts` (id, workerId, kind MULTIPLIER|FIXED, multiplier text e.g. 1.10 [allowed 1.01..3.00] or fixedUgx, fromDay, toDay, reason REQUIRED 5+ chars, createdBy/At, voidedAt/By). A multiplier changes the worker's expected DAILY payout estimate for the period only (never the contributions or the share), a fixed gift is a one-time extra UGX figure; both go to the worker in TEAM_VIEW as optional `gf[]` and are shown as "Gift from the manager: reason". Audit log for create and void. Honest labels: gifts are discretionary and not promised.
-After T3: T4 (leaderboard, levels, streaks, badges, weekly summary), then Piece 9 (Telegram), 10, 11, 12.
+After T3c: T4 (leaderboard, levels, streaks, badges, weekly summary), then Piece 9 (Telegram), 10, 11, 12.
 
 ## Build-fix note (8B)
 The 8B build failed with `Redeclaration: PickedFile`: `ui/WorkerSubmit.kt` (screenshot picker, 4C2/6) and `ui/NcScreens.kt` (statement file, 8B) both declared a public top-level class `PickedFile` in package `com.ctteam.app.ui`. Fix zip `piece-08b-z-fix-pickedfile.zip` (sorts after `piece-08b-nc-statements.zip`) replaces `WorkerSubmit.kt` (class renamed `PickedProof`) and bumps the version to 20 / 0.19.1. RULE for later pieces: every public top-level name in `ui/` and `data/` must be unique in the package; prefix names or make them `private`.
@@ -473,10 +484,10 @@ Decisions:
 - Legal/honesty note for the owner: workers pool real money and see payout figures; keep all numbers as estimates and keep records transparent; check Uganda rules on pooled investments.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-08t3a-mined-days.zip
+- `app/build.gradle.kts` — piece-08t3b-goal-rigs.zip
 - `app/src/main/AndroidManifest.xml` — piece-01-foundation.zip
 - `MainActivity.kt` — piece-03-manager.zip
-- `data/CTDatabase.kt` — piece-08t3a-mined-days.zip
+- `data/CTDatabase.kt` — piece-08t3b-goal-rigs.zip
 - `data/Daos.kt` — piece-08d-nc-matching.zip
 - `data/Entities.kt` — piece-08c-nc-claims.zip
 - `data/ManagerAccounts.kt` — piece-05e-manager-access.zip
@@ -490,10 +501,11 @@ Decisions:
 - `data/Repositories.kt` — piece-02-data.zip
 - `data/ScreenshotChecks.kt` — piece-06-screenshot-verification.zip
 - `data/Security.kt` — piece-04c2-worker-proof.zip
-- `data/ServiceLocator.kt` — piece-08t1-team-ledger.zip
+- `data/ServiceLocator.kt` — piece-08t3b-goal-rigs.zip
 - `data/Sync.kt` — piece-08t2a-team-worker-sync.zip
 - `data/Team.kt` — piece-08t3a-mined-days.zip
-- `data/TeamWorker.kt` — piece-08t3a-mined-days.zip
+- `data/TeamGoals.kt` — piece-08t3b-goal-rigs.zip
+- `data/TeamWorker.kt` — piece-08t3b-goal-rigs.zip
 - `data/Util.kt` — piece-02-data.zip
 - `data/Verification.kt` — piece-06-screenshot-verification.zip
 - `ui/CTApp.kt` — piece-04a-managers-worker.zip
@@ -508,7 +520,8 @@ Decisions:
 - `ui/Screens.kt` — piece-03-manager.zip
 - `ui/SecurityScreens.kt` — piece-04c1-worker-tasks.zip
 - `ui/SyncScreens.kt` — piece-05d-x-reset-request.zip
-- `ui/TeamScreens.kt` — piece-08t3a-mined-days.zip
+- `ui/TeamGoalScreens.kt` — piece-08t3b-goal-rigs.zip
+- `ui/TeamScreens.kt` — piece-08t3b-goal-rigs.zip
 - `ui/Theme.kt` — piece-01-foundation.zip
 - `ui/WorkerDemo.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerHistory.kt` — piece-04c3-worker-history.zip
@@ -517,7 +530,7 @@ Decisions:
 - `ui/WorkerScreens.kt` — piece-08t2a-team-worker-sync.zip
 - `ui/WorkerSubmit.kt` — piece-08b-z-fix-pickedfile.zip
 - `ui/WorkerTasks.kt` — piece-08c-nc-claims.zip
-- `ui/WorkerTeam.kt` — piece-08t2b-team-daily-whatif.zip
+- `ui/WorkerTeam.kt` — piece-08t3b-goal-rigs.zip
 - `app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml` — piece-01-foundation.zip
 - `app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml` — piece-01-foundation.zip
 - `app/src/main/res/values/colors.xml` — piece-01-foundation.zip
