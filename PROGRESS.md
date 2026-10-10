@@ -74,8 +74,9 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 12a | Polish, touch feel: spring press-scale + light haptic on every button, chip and tappable card; cards fade/rise in; both off when phone animations are off | DONE in piece-12a-touch-feel.zip (no DB change, app 50 / 0.49.0; build result: check Actions) |
 | 12b-1 | Three-bar menu at the top right of the MANAGER dashboard: every screen grouped inside it, home keeps only the daily cards (owner request) | DONE in piece-12b-1-menu-manager.zip (no DB change, app 51 / 0.50.0; needs 12a; build result: check Actions) |
 | 12b-2 | The same three-bar menu on the WORKER home: team mining, learn, support, sync, payout number, reminder, security moved into it | DONE in piece-12b-2-menu-worker.zip (no DB change, app 52 / 0.51.0; needs 12b-1; build result: check Actions) |
-| 12b-3 | Polish, motion between screens: manager screen changes slide/fade with direction, dashboard loading shimmer, count-up on the stat tiles, worker home the same | NEXT |
-| 12c | Polish, finishing: empty states, success checkmark after approve / send, glass bottom bar idea (only if wanted) | todo |
+| 12b-3a | Polish: screens slide / cross-fade between each other (manager and worker), direction follows depth | DONE in piece-12b-3a-slide-between-screens.zip (no DB change, app 53 / 0.52.0; needs 12b-2; build result: check Actions) |
+| 12b-3b | Polish: count-up on the stat tiles (manager dashboard and worker home), pulsing placeholder while the dashboard loads | DONE in piece-12b-3b-count-up-shimmer.zip (no DB change, app 54 / 0.53.0; needs 12b-3a; build result: check Actions) |
+| 12c | Polish, finishing: empty states, success checkmark after approve / send, glass bottom bar idea (only if wanted) | NEXT |
 
 ## What each piece contains
 1. **Foundation** — compiling project, fixed signing key, launcher icon from the approved logo, jewel theme, animated logo opening with gold light-sweep, Manager/Worker choice screen, different transition per button.
@@ -711,6 +712,12 @@ Zip: `piece-12b-2-menu-worker.zip` (sorts after `piece-12b-1-menu-manager.zip`).
 - Menu (groups Team and learning / Manager / My account): Team mining (team card + team board), Learn & Earn, Support (badge = unread replies), Sync (badge = items not yet sent, `SyncRepository.unsentCount`), Change payout number, Reminder, Security. Each opens as a page inside `WorkerHomeScreen` (state `section`, back arrow and the phone back button return to the home); the dot on the bars shows when support has unread replies or items are unsent.
 - Because a menu page replaces the home, the home's own state (open task etc.) restarts at the home page when a page is closed.
 
+## Piece 12b-3a + 12b-3b — motion between screens, count-up, shimmer (what exists now)
+Zips: `piece-12b-3a-slide-between-screens.zip` (app 53 / 0.52.0) then `piece-12b-3b-count-up-shimmer.zip` (app 54 / 0.53.0; includes the 3a changes of the same files, so upload both). Files: `ui/Motion.kt`, `ui/ManagerScreens.kt`, `ui/WorkerScreens.kt`, `app/build.gradle.kts`. No database change, no new dependency (`androidx.compose.animation` was already there).
+- 3a: `rememberCTScreenSpec<S>(depthOf)` in `Motion.kt` returns an `AnimatedContent` transition: deeper = new screen slides in from the right and fades while the old one drifts left; back = the reverse; same depth = cross-fade; no movement when the phone's animations are off (`ctReduceMotion`). Used on the manager route switch in `ManagerArea` (`mgrDepth`: Dashboard 0, WorkerDetail/TaskEdit 2, others 1) and on `WorkerShell` (`wDepth`: Home 0, lists 1, TaskDetail 2, Submit and claims-from-a-task 3). The `when` that picks the screen now sits inside `AnimatedContent(... ) { r -> when (r) {...}; Unit }`; every branch uses `r` (the lambda parameter), never `route`.
+- 3b: `ctCountUp(target: Long): Long` counts from 0 on first show and glides from the old to the new value on change (whole-number maths, ends exactly on the target). `StatTile` (manager) and `SummaryTile` (worker home) now take `(label, value: Long, show: (Long) -> String, modifier)`. `ShimmerBlock(height)` = pulsing placeholder; the manager dashboard shows three of them instead of "Loading…".
+- Honest notes: during a slide both screens are alive for 300 ms (their effects run briefly); a screen's scroll position restarts when it is re-entered. Not compile-tested. If Actions fails, paste the error log.
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
@@ -746,7 +753,7 @@ Files (zip: `piece-11d-backup-send.zip`; sorts after `piece-11c-restore.zip`): `
 Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-12b-2-menu-worker.zip
+- `app/build.gradle.kts` — piece-12b-3b-count-up-shimmer.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -781,7 +788,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/WorkerIncoming.kt` — piece-09b-2-worker-import.zip
 - `ui/WorkerNotices.kt` — piece-09b-3-announcements.zip
 - `ui/OriginalCheck.kt` — piece-09c-2-review-originals.zip
-- `ui/Motion.kt` — piece-12a-touch-feel.zip
+- `ui/Motion.kt` — piece-12b-3b-count-up-shimmer.zip
 - `ui/Support.kt` — piece-09d-2a-support-worker.zip
 - `data/Team.kt` — piece-08t3a-mined-days.zip
 - `data/TeamBoard.kt` — piece-08t4-leaderboard.zip
@@ -796,7 +803,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/Components.kt` — piece-12a-touch-feel.zip
 - `ui/Forms.kt` — piece-12a-touch-feel.zip
 - `ui/ManagerAccess.kt` — piece-05e-manager-access.zip
-- `ui/ManagerScreens.kt` — piece-12b-1-menu-manager.zip
+- `ui/ManagerScreens.kt` — piece-12b-3b-count-up-shimmer.zip
 - `ui/MenuDrawer.kt` — piece-12b-1-menu-manager.zip
 - `ui/LearnManager.kt` — piece-10b-learn-send.zip
 - `ui/SupportManager.kt` — piece-09d-2b-support-manager.zip
@@ -816,7 +823,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/WorkerHistory.kt` — piece-04c3-worker-history.zip
 - `ui/WorkerNcClaim.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerPayout.kt` — piece-04c4-worker-payout.zip
-- `ui/WorkerScreens.kt` — piece-12b-2-menu-worker.zip
+- `ui/WorkerScreens.kt` — piece-12b-3b-count-up-shimmer.zip
 - `ui/WorkerSubmit.kt` — piece-08b-z-fix-pickedfile.zip
 - `ui/WorkerTasks.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerTeam.kt` — piece-08t3c-gifts.zip
