@@ -53,8 +53,9 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 9A | Telegram, manager side: connect your own bot (token), read worker messages and text files while the manager area is open, auto-import (same checks as Sync), chat links, inbox for items needing a tap | DONE in piece-09a-telegram-reader.zip (DB v13, app 30 / 0.29.0; first use of the INTERNET permission; build result: check Actions) |
 | 9B-1 | Telegram, manager -> worker: send updates (new only / everything), reset codes (incl. approve-and-send) and JOIN codes from the app to the worker's linked chat; send-all; retry-safe numbers | DONE in piece-09b-1-telegram-send.zip (no DB change, app 31 / 0.30.0; build result: check Actions) |
 | 9B-2 | Worker side: Android share target (Telegram > Share > CT Team), automatic import on the worker phone, clipboard "USE IT" offer, reset code fills itself | DONE in piece-09b-2-worker-import.zip (no DB change, app 32 / 0.31.0; needs 9B-1 in the repo; build result: check Actions) |
-| 9B-3 | Announcements to all workers (one message, signed by the manager) | todo (was part of 9B; small) |
-| 9C | Telegram: original screenshots as documents (worker sends, manager downloads, SHA-256 compared with the report) | todo |
+| 9B-3 | Announcements: one message, signed separately per worker, sent to every linked Telegram chat; shows on the worker's home screen | DONE in piece-09b-3-announcements.zip (no DB change, app 33 / 0.32.0; needs 9B-1 and 9B-2; build result: check Actions) |
+| 9C-1 | Originals: a worker sends the picture to the bot as a FILE; the manager app downloads it, works out SHA-256, saves it, compares with the reports, logs the result | DONE in piece-09c-1-original-pictures.zip (no DB change, app 34 / 0.33.0; needs 9A; build result: check Actions) |
+| 9C-2 | Review screen shows per proof: original received / not received / fingerprint matches; re-checks dHash + hidden tags on the saved original; shows the picture; "ask for the original" message on Telegram; worker hint | NEXT |
 | 9D | Support chat (history in the app), weekly summaries and notifications by Telegram | todo |
 | 10 | Learn & Earn, announcements | todo |
 | 11 | Backup / restore / migration | todo |
@@ -130,7 +131,7 @@ Files (zip: `piece-04a-managers-worker.zip`):
 - `data/ManagerAccounts.kt` — table `manager_accounts` (up to 20): code name (stored UPPERCASE, unique), personal PIN (PBKDF2, 40 000 iterations, per-row salt), `isMain`, `suspendedUntil` (null / time / `Long.MAX_VALUE` = until re-enabled), `accessExpiresAt` (null / time). `ManagerAccountRepository`: `ensureMain`, `login(pin)` (PIN-only; PINs are unique), `blockReason`, `statusText`, `add`, `disable(durationMs|null)`, `allowFor(durationMs)`, `enableNow`, `setPin`, `rename`, `remove`. Only the main manager may call the change methods. Every action goes to the audit log with actor `manager:CODENAME`.
 - MAIN manager is seeded on first use with code name `MAIN` and PIN 114477, stored only as a salted hash (the PIN is not in the source as text). Main can change its own PIN and name in Manager > Managers > MAIN. The main manager can never be disabled or removed.
 - `data/CTDatabase.kt` — piece-09a-telegram-reader.zip
-- `data/ServiceLocator.kt` — piece-09a-telegram-reader.zip
+- `data/ServiceLocator.kt` — piece-09c-1-original-pictures.zip
 - `ui/ManagerAccess.kt` — `ManagerSession.actor`, `ManagerAccessGate` (PIN sign-in, 5 wrong = 30 s lock, shows the reason if blocked), `ManagersScreen` (main only: list with status, add, detail with Disable for period / Disable until re-enabled / Allow only for period / Enable now / rename / reset PIN / remove). Periods: hours, days, weeks, months (30 d), years (365 d), 1–1000.
 - `ui/ManagerScreens.kt` (replaced) — old PinGate removed; `ManagerArea` signs in with the new gate; a watchdog re-checks the signed-in manager every 5 s and signs them out when disabled; dashboard shows "Signed in as CODE" and a Managers card for the main manager; `ACTOR` now equals `ManagerSession.actor`.
 - `ui/WorkerScreens.kt` — `WorkerArea`: first time = registration (National ID, names, MTN/Airtel number, "number is in my own name" confirmation) via `WorkerRepository.register`; the worker id is remembered in `meta` key `WORKER_META_KEY`. Then `WorkerHomeScreen`: identity card, this-week expected payout (`SubmissionRepository.expectedForWeek`), pending/approved/rejected counts, change payout number (`changePhone`, once/week rule).
@@ -149,7 +150,7 @@ Files (zip: `piece-04b-security.zip`, sorts AFTER `piece-04a-managers-worker.zip
 - `ui/ManagerAccess.kt` (replaced) — `ManagerAccessGate` now uses `CredentialGate`; Managers screen: ADD MANAGER = code name + PIN length (6/8/10) -> app makes the PIN, shows it ONCE with a "copy message to send" button; manager detail has RESET TO DEFAULT (tap twice, new PIN shown once).
 - `ui/ManagerScreens.kt` (replaced) — route `MySecurity`, dashboard card "My security", watchdog also signs a manager out when `credVersion` changed (reset or credentials changed elsewhere).
 - `ui/WorkerScreens.kt` (replaced) — `WorkerArea` phases: Register -> (Setup for pre-4B workers) -> Gate -> Home; registration now also asks username, password, PIN; home shows username and a change PIN/password card; the "coming next" card now says Piece 4C.
-- `app/build.gradle.kts` — piece-09b-2-worker-import.zip
+- `app/build.gradle.kts` — piece-09c-1-original-pictures.zip
 
 Rules implemented:
 - FULL sign-in = name (manager code name / worker username) + password + PIN. Needed first time on a phone and again every 30 days on that phone. QUICK unlock = only PIN OR only password, for 30 days after the last FULL sign-in on that phone (`device_trust`). Trust is void when `credVersion` changes (reset, password change, PIN change) or the manager taps "Forget this phone".
@@ -516,9 +517,23 @@ Files: `AndroidManifest.xml` (MainActivity `singleTop` + `ACTION_SEND text/plain
 - `WorkerIncomingCard` (top of the worker home): imports a shared update at once through `receiveFromManager` (same checks as paste) and shows a short result. It also offers USE IT / NOT NOW when the clipboard holds an update (checked at most once a minute; nothing happens without a tap).
 - A shared RESET code for that worker opens the recovery screen and fills the box.
 
+### 9B-3 — announcements (app 33 / 0.32.0)
+Zip: `piece-09b-3-announcements.zip`. Files: `data/Sync.kt`, `data/Telegram.kt`, `ui/TelegramScreens.kt`, `ui/WorkerScreens.kt`, `ui/WorkerNotices.kt` (new), `app/build.gradle.kts`. No database change.
+- New M2W message type `NOTICE` (body: id, text up to 600 characters `NOTICE_MAX`, time). `SyncRepository.makeNotice(workerId, text, actor)` signs one per worker with the normal next message number; `releaseSeq` gives the number back when nothing was delivered (no gap warning on the worker phone). Audit `SYNC_NOTICE_MADE` (text is not logged) / `NOTICE_RECEIVED`.
+- `TelegramRepository.sendAnnouncement(text, actor)` loops over all linked chats. Manager > Telegram: "Announcement to all workers" card (needs a second tap to send; the box clears only if all were sent).
+- Worker: received like any update (Share or USE IT); stored in `meta` key `notices:<workerId>` (newest first, last 20 kept, duplicates ignored by id); `WorkerNoticesCard` on the home screen shows the latest 5 with a CLEAR button. Old app versions answer "needs a newer version" and the message can be sent again.
+- Limits: announcements only go to workers who have a linked chat; Telegram can read the text (signed, not secret). No announcement history on the manager side yet (the Telegram activity log shows each send).
+
 ### Limits (both)
 Telegram bot chats are not end-to-end encrypted: the messages are signed but readable by Telegram, and ENROLL/JOIN codes contain the worker's secret key. The worker must press START in the bot once. Sending only happens while the manager app is open and online. Not compile-tested here; if Actions fails, paste the error log (Room/KSP: no Java keywords as parameter names).
-Still to do: 9B-3 announcements (one signed message for all workers), 9C screenshots as Telegram documents, 9D support chat / weekly summaries / notifications.
+Still to do: 9C-2 review screen, 9D support chat / weekly summaries / notifications.
+
+## Piece 9C-1 — original pictures on Telegram (what exists now)
+Zip: `piece-09c-1-original-pictures.zip` (sorts after `piece-09b-3-announcements.zip`). Files: `data/Telegram.kt`, `data/ServiceLocator.kt` (`Repos(db, filesDir)`; `TelegramRepository` gets the folder `filesDir/originals`), `ui/TelegramScreens.kt`, `app/build.gradle.kts` (34 / 0.33.0). No database change.
+- Worker: in Telegram sends the screenshot to the bot with paperclip > File (NOT as a photo: Telegram shrinks photos and the fingerprint would never match). A photo is answered in the manager's log with that advice.
+- Manager phone (reading loop, only from a chat linked to a worker; strangers ignored): picture documents (image/* or .png .jpg .jpeg .webp .heic, up to 20 MB, the Telegram bot limit) are downloaded, SHA-256 computed HERE, saved as `originals/<sha>.img` (stops saving at 400 MB total; the result is still recorded), and kept in `meta` key `orig:<sha>` (JSON: w worker, n file name, s size, at time, f saved?). Read with `TelegramRepository.originalOf(sha)` and `originalFile(sha)`.
+- Compared at once with `proofs.sha256`: same worker = log "Original matches the report"; the hash is in another worker's report = red log "File belongs to another worker's report"; no report has it yet = saved and logged (it will match after the report is imported; the lookup is by hash, so order does not matter). Audit `TG_ORIGINAL_MATCH`, `TG_ORIGINAL_OTHER_WORKER`, `TG_ORIGINAL_UNMATCHED`. New log kinds `ORIGINAL`, `ORIGINAL_BAD`.
+- Honest limit: a match proves the file is the SAME one the report names. It does not prove the picture is genuine (an edited picture would match its own hash). 9C-2 therefore re-derives dHash and hidden tags from the saved original on the manager phone and compares them with what the report claimed.
 
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
@@ -561,11 +576,12 @@ Decisions:
 - `data/ScreenshotChecks.kt` — piece-06-screenshot-verification.zip
 - `data/Security.kt` — piece-04c2-worker-proof.zip
 - `data/ServiceLocator.kt` — piece-08t4-leaderboard.zip
-- `data/Sync.kt` — piece-09b-1-telegram-send.zip
-- `data/Telegram.kt` — piece-09b-1-telegram-send.zip
-- `ui/TelegramScreens.kt` — piece-09b-1-telegram-send.zip
+- `data/Sync.kt` — piece-09b-3-announcements.zip
+- `data/Telegram.kt` — piece-09c-1-original-pictures.zip
+- `ui/TelegramScreens.kt` — piece-09c-1-original-pictures.zip
 - `ui/ShareInbox.kt` — piece-09b-2-worker-import.zip
 - `ui/WorkerIncoming.kt` — piece-09b-2-worker-import.zip
+- `ui/WorkerNotices.kt` — piece-09b-3-announcements.zip
 - `data/Team.kt` — piece-08t3a-mined-days.zip
 - `data/TeamBoard.kt` — piece-08t4-leaderboard.zip
 - `ui/TeamBoardScreens.kt` — piece-08t4-leaderboard.zip
@@ -595,7 +611,7 @@ Decisions:
 - `ui/WorkerHistory.kt` — piece-04c3-worker-history.zip
 - `ui/WorkerNcClaim.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerPayout.kt` — piece-04c4-worker-payout.zip
-- `ui/WorkerScreens.kt` — piece-09b-2-worker-import.zip
+- `ui/WorkerScreens.kt` — piece-09b-3-announcements.zip
 - `ui/WorkerSubmit.kt` — piece-08b-z-fix-pickedfile.zip
 - `ui/WorkerTasks.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerTeam.kt` — piece-08t3c-gifts.zip
