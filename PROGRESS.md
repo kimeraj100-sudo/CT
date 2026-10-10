@@ -76,7 +76,7 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 12b-2 | The same three-bar menu on the WORKER home: team mining, learn, support, sync, payout number, reminder, security moved into it | DONE in piece-12b-2-menu-worker.zip (no DB change, app 52 / 0.51.0; needs 12b-1; build result: check Actions) |
 | 12b-3a | Polish: screens slide / cross-fade between each other (manager and worker), direction follows depth | DONE in piece-12b-3a-slide-between-screens.zip (no DB change, app 53 / 0.52.0; needs 12b-2; build result: check Actions) |
 | 12b-3b | Polish: count-up on the stat tiles (manager dashboard and worker home), pulsing placeholder while the dashboard loads | DONE in piece-12b-3b-count-up-shimmer.zip (no DB change, app 54 / 0.53.0; needs 12b-3a; build result: check Actions) |
-| 12c | Polish, finishing: empty states, success checkmark after approve / send, glass bottom bar idea (only if wanted) | NEXT |
+| 12c | Polish, finishing: friendly empty states + a drawn success checkmark after approve / reject, support reply, lesson save / send | DONE in piece-12c-empty-states-success.zip (no DB change, app 55 / 0.54.0; needs 12b-3b; build result: check Actions). Glass bottom bar: NOT built (only if the owner asks). Next: run the whole app on a phone and report problems; then fixes. |
 
 ## What each piece contains
 1. **Foundation** — compiling project, fixed signing key, launcher icon from the approved logo, jewel theme, animated logo opening with gold light-sweep, Manager/Worker choice screen, different transition per button.
@@ -718,6 +718,11 @@ Zips: `piece-12b-3a-slide-between-screens.zip` (app 53 / 0.52.0) then `piece-12b
 - 3b: `ctCountUp(target: Long): Long` counts from 0 on first show and glides from the old to the new value on change (whole-number maths, ends exactly on the target). `StatTile` (manager) and `SummaryTile` (worker home) now take `(label, value: Long, show: (Long) -> String, modifier)`. `ShimmerBlock(height)` = pulsing placeholder; the manager dashboard shows three of them instead of "Loading…".
 - Honest notes: during a slide both screens are alive for 300 ms (their effects run briefly); a screen's scroll position restarts when it is re-entered. Not compile-tested. If Actions fails, paste the error log.
 
+## Piece 12c — empty states + success checkmark (what exists now)
+Zip: `piece-12c-empty-states-success.zip` (sorts after `piece-12b-3b-count-up-shimmer.zip`). Files: `ui/Polish.kt` (new: `EmptyState(icon, title, hint)`, `SuccessNote(text)` = circle draws itself then the check mark, beside the green message; both static when phone animations are off), `ui/ManagerScreens.kt` (empty states for workers, tasks, review; after APPROVE / REJECT the review list shows a SuccessNote for 3.5 s; the decision now runs in the list screen's scope so it finishes even when the detail screen disappears), `ui/SupportManager.kt`, `ui/LearnManager.kt`, `ui/PayoutScreens.kt` (empty state "No payout is waiting"), `app/build.gradle.kts` (55 / 0.54.0). No database change.
+- Errors keep their red text; only successes use `SuccessNote`.
+- Not built: the glass bottom bar (listed in the SPEC polish idea; the three-bar menu covers navigation).
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
@@ -753,7 +758,7 @@ Files (zip: `piece-11d-backup-send.zip`; sorts after `piece-11c-restore.zip`): `
 Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-12b-3b-count-up-shimmer.zip
+- `app/build.gradle.kts` — piece-12c-empty-states-success.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -789,6 +794,9 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/WorkerNotices.kt` — piece-09b-3-announcements.zip
 - `ui/OriginalCheck.kt` — piece-09c-2-review-originals.zip
 - `ui/Motion.kt` — piece-12b-3b-count-up-shimmer.zip
+- `ui/Polish.kt` — piece-12c-empty-states-success.zip
+- `ui/SupportManager.kt` — piece-12c-empty-states-success.zip
+- `ui/LearnManager.kt` — piece-12c-empty-states-success.zip
 - `ui/Support.kt` — piece-09d-2a-support-worker.zip
 - `data/Team.kt` — piece-08t3a-mined-days.zip
 - `data/TeamBoard.kt` — piece-08t4-leaderboard.zip
@@ -803,15 +811,13 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/Components.kt` — piece-12a-touch-feel.zip
 - `ui/Forms.kt` — piece-12a-touch-feel.zip
 - `ui/ManagerAccess.kt` — piece-05e-manager-access.zip
-- `ui/ManagerScreens.kt` — piece-12b-3b-count-up-shimmer.zip
+- `ui/ManagerScreens.kt` — piece-12c-empty-states-success.zip
 - `ui/MenuDrawer.kt` — piece-12b-1-menu-manager.zip
-- `ui/LearnManager.kt` — piece-10b-learn-send.zip
-- `ui/SupportManager.kt` — piece-09d-2b-support-manager.zip
 - `ui/NotifyScreens.kt` — piece-09d-3-notifications.zip
 - `ui/ManagerSyncScreens.kt` — piece-05e-manager-access.zip
 - `ui/NcMatchScreens.kt` — piece-08d-nc-matching.zip
 - `ui/NcScreens.kt` — piece-08d-nc-matching.zip
-- `ui/PayoutScreens.kt` — piece-08a-pdf-reader.zip
+- `ui/PayoutScreens.kt` — piece-12c-empty-states-success.zip
 - `ui/Screens.kt` — piece-03-manager.zip
 - `ui/SecurityScreens.kt` — piece-04c1-worker-tasks.zip
 - `ui/SyncScreens.kt` — piece-11e-3-worker-new-manager.zip
