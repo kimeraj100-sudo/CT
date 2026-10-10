@@ -56,7 +56,9 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 9B-3 | Announcements: one message, signed separately per worker, sent to every linked Telegram chat; shows on the worker's home screen | DONE in piece-09b-3-announcements.zip (no DB change, app 33 / 0.32.0; needs 9B-1 and 9B-2; build result: check Actions) |
 | 9C-1 | Originals: a worker sends the picture to the bot as a FILE; the manager app downloads it, works out SHA-256, saves it, compares with the reports, logs the result | DONE in piece-09c-1-original-pictures.zip (no DB change, app 34 / 0.33.0; needs 9A; build result: check Actions) |
 | 9C-2 | Review screen, per screenshot: original received or not, SHA-256 match, dHash + hidden tags re-worked from the saved original and compared with the report, show the picture, ASK FOR THE ORIGINAL on Telegram | DONE in piece-09c-2-review-originals.zip (no DB change, app 35 / 0.34.0; needs 9C-1; build result: check Actions) |
-| 9D | Support chat (history in the app), weekly summaries and notifications by Telegram | todo |
+| 9D-1 | Weekly summaries (T4 text) sent on Telegram, one worker or all, once per worker per week | DONE in piece-09d-1-weekly-summaries.zip (no DB change, app 36 / 0.35.0; needs 9B-1; build result: check Actions) |
+| 9D-2 | Support chat: worker asks, manager answers, history kept in the app (table `support_messages` already exists), over Telegram/share | NEXT |
+| 9D-3 | Notifications (new item waiting for the manager; update for the worker); may need WorkManager + notification permission | todo |
 | 10 | Learn & Earn, announcements | todo |
 | 11 | Backup / restore / migration | todo |
 | 12 | Premium polish & animations | todo |
@@ -150,7 +152,7 @@ Files (zip: `piece-04b-security.zip`, sorts AFTER `piece-04a-managers-worker.zip
 - `ui/ManagerAccess.kt` (replaced) — `ManagerAccessGate` now uses `CredentialGate`; Managers screen: ADD MANAGER = code name + PIN length (6/8/10) -> app makes the PIN, shows it ONCE with a "copy message to send" button; manager detail has RESET TO DEFAULT (tap twice, new PIN shown once).
 - `ui/ManagerScreens.kt` (replaced) — route `MySecurity`, dashboard card "My security", watchdog also signs a manager out when `credVersion` changed (reset or credentials changed elsewhere).
 - `ui/WorkerScreens.kt` (replaced) — `WorkerArea` phases: Register -> (Setup for pre-4B workers) -> Gate -> Home; registration now also asks username, password, PIN; home shows username and a change PIN/password card; the "coming next" card now says Piece 4C.
-- `app/build.gradle.kts` — piece-09c-2-review-originals.zip
+- `app/build.gradle.kts` — piece-09d-1-weekly-summaries.zip
 
 Rules implemented:
 - FULL sign-in = name (manager code name / worker username) + password + PIN. Needed first time on a phone and again every 30 days on that phone. QUICK unlock = only PIN OR only password, for 30 days after the last FULL sign-in on that phone (`device_trust`). Trust is void when `credVersion` changes (reset, password change, PIN change) or the manager taps "Forget this phone".
@@ -526,7 +528,7 @@ Zip: `piece-09b-3-announcements.zip`. Files: `data/Sync.kt`, `data/Telegram.kt`,
 
 ### Limits (both)
 Telegram bot chats are not end-to-end encrypted: the messages are signed but readable by Telegram, and ENROLL/JOIN codes contain the worker's secret key. The worker must press START in the bot once. Sending only happens while the manager app is open and online. Not compile-tested here; if Actions fails, paste the error log (Room/KSP: no Java keywords as parameter names).
-Still to do: 9D support chat / weekly summaries / notifications.
+Still to do: 9D-2 support chat, 9D-3 notifications.
 
 ## Piece 9C-1 — original pictures on Telegram (what exists now)
 Zip: `piece-09c-1-original-pictures.zip` (sorts after `piece-09b-3-announcements.zip`). Files: `data/Telegram.kt`, `data/ServiceLocator.kt` (`Repos(db, filesDir)`; `TelegramRepository` gets the folder `filesDir/originals`), `ui/TelegramScreens.kt`, `app/build.gradle.kts` (34 / 0.33.0). No database change.
@@ -541,6 +543,12 @@ Zip: `piece-09c-2-review-originals.zip` (sorts after `piece-09c-1-original-pictu
 - Received (`originalOf(sha)`): green "very same file as in the report"; red line if it came from another worker's chat. If the file is saved, `ProofAnalyzer.dHash` and `ProofAnalyzer.tags` are run again on the manager phone and compared with the report's `dhash` / `metadataTags` (different = red "✖ ... DIFFERENT from what was reported"; report without dHash = nothing to compare). SHOW THE ORIGINAL opens it down-scaled (longest side about 1400 px) / HIDE.
 - Evidence only: nothing changes the verdict or decides; honesty text stays (a match does not prove the picture is genuine).
 - Still not done: a worker-side hint inside the app that says "send the original as a file" (the ask message says it); automatic ask for every doubtful proof; 9D.
+
+## Piece 9D-1 — weekly summaries on Telegram (what exists now)
+Zip: `piece-09d-1-weekly-summaries.zip` (sorts after `piece-09c-2-review-originals.zip`). Files: `ui/TeamBoardScreens.kt`, `app/build.gradle.kts` (36 / 0.35.0). No database change, no Telegram.kt change (uses `TelegramRepository.sendCodes`).
+- Manager > Team > "Weekly summary text": pick a worker, the existing COPY / SHARE stay; new SEND ON TELEGRAM (button reads SEND AGAIN when this week's was already sent) for workers with a linked chat; and SEND LAST WEEK'S SUMMARY TO ALL ON TELEGRAM (n not sent this week), two taps to confirm. The text is `TeamBoardRepository.weeklySummary` (last Monday-Sunday), plain text, NOT signed and not imported by the worker app (just a chat message).
+- "Sent this week" is kept in `meta` key `tg:weekly:<workerId>` = the week key of the day it was sent. Failed sends are not marked, so they are offered again. The activity log in Manager > Telegram shows each send (`TG_SENT` audit).
+- Not done: scheduled/automatic weekly sending (needs 9D-3 background work); the SPEC's weekly file of all transactions.
 
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
@@ -592,7 +600,7 @@ Decisions:
 - `ui/OriginalCheck.kt` — piece-09c-2-review-originals.zip
 - `data/Team.kt` — piece-08t3a-mined-days.zip
 - `data/TeamBoard.kt` — piece-08t4-leaderboard.zip
-- `ui/TeamBoardScreens.kt` — piece-08t4-leaderboard.zip
+- `ui/TeamBoardScreens.kt` — piece-09d-1-weekly-summaries.zip
 - `ui/WorkerTeamBoard.kt` — piece-08t4-leaderboard.zip
 - `data/TeamGifts.kt` — piece-08t3c-gifts.zip
 - `data/TeamGoals.kt` — piece-08t3b-goal-rigs.zip
