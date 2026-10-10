@@ -68,7 +68,9 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 11b | Backup export: one encrypted, integrity-checked, versioned file (passphrase, AES-GCM, SHA-256 inside), saved with the file picker; CHECK A BACKUP FILE | DONE in piece-11b-backup-export.zip (no DB change, app 44 / 0.43.0; build result: check Actions) |
 | 11c | Restore: read + verify the file, preview (counts now vs backup, age, warnings), typed RESTORE, safety copy, replace the database, sync numbers kept moving forward, restart, UNDO | DONE in piece-11c-restore.zip (no DB change, app 45 / 0.44.0; build result: check Actions) |
 | 11d | Send the backup to Telegram (own bot, as a document) / Drive / SD card through the share sheet; reminder when the last backup is old | DONE in piece-11d-backup-send.zip (no DB change, app 46 / 0.45.0; build result: check Actions) |
-| 11e | Emergency migration to a new phone (worker keys, manager accounts, pin ledger, sync counters), tested against the 5A-5E rules | NEXT |
+| 11e-1 | Migration, part 1: message numbers stay in step after a restore or a new manager phone (worker tells the manager the last number it received) | DONE in piece-11e-1-number-sync.zip (no DB change, app 47 / 0.46.0; needs 11d; build result: check Actions) |
+| 11e-2 | Migration, part 2: manager screen "Move to a new phone" (step list with live checks) + RETIRE THIS PHONE (stops Telegram reading, notifications and sign-in on the old phone) | NEXT |
+| 11e-3 | Migration, part 3: worker card "The manager has a new phone" (one tap: connection code + everything again) | todo |
 | 12 | Premium polish & animations | todo |
 
 ## What each piece contains
@@ -194,7 +196,7 @@ Files (zip: `piece-04b-security.zip`, sorts AFTER `piece-04a-managers-worker.zip
 - `ui/ManagerAccess.kt` (replaced) — `ManagerAccessGate` now uses `CredentialGate`; Managers screen: ADD MANAGER = code name + PIN length (6/8/10) -> app makes the PIN, shows it ONCE with a "copy message to send" button; manager detail has RESET TO DEFAULT (tap twice, new PIN shown once).
 - `ui/ManagerScreens.kt` (replaced) — route `MySecurity`, dashboard card "My security", watchdog also signs a manager out when `credVersion` changed (reset or credentials changed elsewhere).
 - `ui/WorkerScreens.kt` (replaced) — `WorkerArea` phases: Register -> (Setup for pre-4B workers) -> Gate -> Home; registration now also asks username, password, PIN; home shows username and a change PIN/password card; the "coming next" card now says Piece 4C.
-- `app/build.gradle.kts` — piece-11c-restore.zip
+- `app/build.gradle.kts` — piece-11e-1-number-sync.zip
 
 Rules implemented:
 - FULL sign-in = name (manager code name / worker username) + password + PIN. Needed first time on a phone and again every 30 days on that phone. QUICK unlock = only PIN OR only password, for 30 days after the last FULL sign-in on that phone (`device_trust`). Trust is void when `credVersion` changes (reset, password change, PIN change) or the manager taps "Forget this phone".
@@ -665,6 +667,15 @@ Zip: `piece-11c-restore.zip` (sorts after `piece-11b-backup-export.zip`; no data
 11d: send the same file to Telegram as a document (9A bot), plus "last backup" age on the dashboard with a reminder after 7 days (reuse the 9D-3 notification worker).
 11e: emergency migration: what must move to a new phone (manager accounts and credVersion, pin_ledger, per-worker keys, sync counters `sync:out:*`, last-seen numbers), and what a worker does when the manager's phone changes. Check against the 5A-5E rules before building.
 
+## Piece 11e-1 — message numbers stay in step (what exists now)
+Zip: `piece-11e-1-number-sync.zip` (sorts after `piece-11d-backup-send.zip`). Files: `data/Sync.kt`, `app/build.gradle.kts` (47 / 0.46.0). No database change, no screen change.
+Why: replay protection means a worker phone accepts each manager message number once. If the manager phone is restored from an OLDER backup (11c) or replaced, its counter `sync:out:M2W:<worker>` can be lower than what the worker already received, and new updates would be refused as copies. 11c adds +20 as a first guard; this piece makes it exact.
+- New worker -> manager type `SYNCINFO` (`TYPE_SYNCINFO`, body `ls` = highest manager message number this worker phone has received). It rides in every report as an item `SYI:<worker>:<ls>` (new item each time the number changes; a report that would hold ONLY this note counts as "nothing new", and it is not counted in "Not reported yet" or the 9D-3 reminder).
+- The ENROLL (connection) code also carries `ls` now (field `ls`, signed with the rest).
+- Manager phone: `SyncRepository.raiseCounter(workerId, lastSeen, actor)` raises the counter to `ls` when it is lower, never lowers it, and never by more than `COUNTER_JUMP_MAX` = 1,000,000 in one step; audit `SYNC_COUNTER_RAISED` ("counter a -> b"). Called by `applySyncInfo` (import result line "Message numbers aligned for <name>") and by `acceptEnrollment` (a worker who enrolls on a fresh manager phone after getting updates from the old one).
+- Effect: after any restore or phone change the first report each worker sends fixes the manager's numbering by itself; no manual step. Until that report arrives, an update sent early may be refused by the worker as "Already received" and must be sent again (SEND EVERYTHING AGAIN).
+- Limits: it does not bring back data the manager phone lost (tasks, payouts, manager accounts: that is what the backup is for). A worker who never reports keeps the old gap.
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
@@ -725,7 +736,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `data/ScreenshotChecks.kt` — piece-06-screenshot-verification.zip
 - `data/Security.kt` — piece-04c2-worker-proof.zip
 - `data/ServiceLocator.kt` — piece-10a-learn-manager.zip
-- `data/Sync.kt` — piece-10b-learn-send.zip
+- `data/Sync.kt` — piece-11e-1-number-sync.zip
 - `data/Telegram.kt` — piece-11d-backup-send.zip
 - `data/Notify.kt` — piece-11d-backup-send.zip
 - `ui/TelegramScreens.kt` — piece-09c-1-original-pictures.zip
