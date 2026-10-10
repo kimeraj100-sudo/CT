@@ -67,8 +67,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 11a | Main manager login built into the build: code name MAIN + password + PIN (hashes only) | DONE in piece-11a-main-login.zip (no DB change, app 43 / 0.42.0; build result: check Actions) |
 | 11b | Backup export: one encrypted, integrity-checked, versioned file (passphrase, AES-GCM, SHA-256 inside), saved with the file picker; CHECK A BACKUP FILE | DONE in piece-11b-backup-export.zip (no DB change, app 44 / 0.43.0; build result: check Actions) |
 | 11c | Restore: read + verify the file, preview (counts now vs backup, age, warnings), typed RESTORE, safety copy, replace the database, sync numbers kept moving forward, restart, UNDO | DONE in piece-11c-restore.zip (no DB change, app 45 / 0.44.0; build result: check Actions) |
-| 11d | Send the backup to Telegram (own bot, as a document) / Drive / SD card through the share sheet; reminder when the last backup is old | NEXT |
-| 11e | Emergency migration to a new phone (worker keys, manager accounts, pin ledger, sync counters), tested against the 5A-5E rules | todo |
+| 11d | Send the backup to Telegram (own bot, as a document) / Drive / SD card through the share sheet; reminder when the last backup is old | DONE in piece-11d-backup-send.zip (no DB change, app 46 / 0.45.0; build result: check Actions) |
+| 11e | Emergency migration to a new phone (worker keys, manager accounts, pin ledger, sync counters), tested against the 5A-5E rules | NEXT |
 | 12 | Premium polish & animations | todo |
 
 ## What each piece contains
@@ -687,14 +687,27 @@ Decisions:
 - Pieces: T1 data + formulas + rates (tables via ONE migration), T2 worker screens, T3 manager screens (mined amounts, hash goal, gifts, rig ledger), T4 leaderboard, levels, streaks, badges. Team figures reach worker phones as signed M2W updates (new type, same 5C style).
 - Legal/honesty note for the owner: workers pool real money and see payout figures; keep all numbers as estimates and keep records transparent; check Uganda rules on pooled investments.
 
+## Piece 11d — Send the backup out, and remind (what exists now)
+Files (zip: `piece-11d-backup-send.zip`; sorts after `piece-11c-restore.zip`): `data/Backup.kt` (replaced), `data/Telegram.kt` (replaced), `data/Notify.kt` (replaced), `ui/BackupScreens.kt` (replaced), `ui/ManagerScreens.kt` (replaced), `app/src/main/AndroidManifest.xml` (replaced: a `FileProvider`), `app/src/main/res/xml/file_paths.xml` (NEW), `app/build.gradle.kts` (46 / 0.45.0). No database change.
+- Where it is: Manager > Backup (main manager only). Under CREATE BACKUP there are two new buttons that use the SAME passphrase fields: SEND TO MY TELEGRAM and SHARE… (DRIVE, SD CARD, OTHER APPS). CREATE BACKUP with the file picker is unchanged.
+- Flow: `BackupRepository.exportToCache` makes the normal encrypted `.ctb` into a temporary file in `cacheDir/backup/` (older temporary copies are deleted first; `export(..., markLast = false)` so nothing counts yet). TELEGRAM: `TelegramRepository.sendBackupFile` uploads it as a document, then the temporary file is deleted. SHARE: `FileProvider` (authority `<applicationId>.files`, only the `cache-path backup/`) + `ACTION_SEND` (`application/octet-stream`, `ClipData`, read-permission flag) opens the Android share window; the temporary encrypted copy stays in the private cache until the next backup (it is encrypted; it is NOT part of Android auto-backup because it is cache).
+- "Last backup" (`backup:lastAt`) now moves only when the backup really left the phone: Telegram accepted it, or the share window was opened (`BackupRepository.markLastBackup`). If Telegram refuses, the screen says the backup was made but NOT delivered and the date is not changed. The app cannot know whether a share target (Drive, e-mail) finished, and says so; CHECK A BACKUP FILE is the way to verify the copy.
+- The manager's OWN Telegram chat: the bot can only write to chats that wrote to it first, and worker chats are separate. So there is a pairing step (card "Telegram for backups"): LINK MY TELEGRAM shows a one-time code `BK-` + 8 digits (`startBackupLink`), valid 5 minutes, dies after 5 wrong tries. The manager sends it to the bot from their own Telegram; `TelegramRepository.handleUpdate` calls `tryBackupLink` BEFORE the CT1 handling (only for text without a document); on a match it saves `meta tg:backupChat`, replies "Linked" in that chat and audits `TG_BACKUP_CHAT_LINKED`. The Backup screen polls every 3 s while a code is pending (needs the Telegram reading loop, i.e. the manager area open). UNLINK MY TELEGRAM clears it (`TG_BACKUP_CHAT_UNLINKED`). A text starting `BK-` with no code pending is ignored like any chatter. Audit: `TG_BACKUP_LINK_STARTED`, `TG_BACKUP_LINK_LOCKED`, `TG_BACKUP_SENT` (size only), `BACKUP_REMIND_DAYS`.
+- Size: Telegram lets bots send up to 50 MB; the app refuses above 49,000,000 bytes with the advice to use SHARE or CREATE BACKUP. `TelegramClient.sendDocument` now takes an optional `mime` (default `text/plain`, backup uses `application/octet-stream`), announces the exact length (`setFixedLengthStreamingMode`) so a big file is streamed instead of buffered twice, and its read timeout is 120 s. Existing callers are unchanged.
+- Privacy: the file is encrypted (AES-256-GCM, PBKDF2, 11b) before it leaves the app, so Telegram, Drive or e-mail hold only ciphertext; the passphrase is never stored or sent.
+- Reminder: setting `backup:remindDays` (default 7, allowed 1..90, card "Backup reminder", audited). `isOverdue` / `overdueText`: no backup ever, or older than that many days. Shown as (1) a warning card at the top of the Backup screen, (2) a "!" badge on the dashboard Backup card (main manager only), (3) a phone notification from the existing manager check (9D-3, `CTNotify.runManagerCheck`) via `BackupRepository.reminderDue`: at most one per day (`backup:remindedAt`), id `CTNotify.ID_BACKUP` (9104), and ONLY while the manager notification check is turned on in Manager > Notifications (there is no separate switch; the banner and badge always work).
+- Limits: the phone notification needs the manager check on and Android notification permission; the Telegram link needs the manager area open to see the code; backups above 49 MB cannot go by Telegram; share-window delivery is not confirmed by Android. NOT in the backup file (unchanged from 11b): the saved original pictures. Not compile-tested (no Kotlin/Gradle in the sandbox); if Actions fails, paste the error log.
+Next: 11e (emergency migration to a new phone), then 12.
+
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-11b-backup-export.zip
-- `data/Backup.kt` — piece-11b-backup-export.zip
-- `ui/BackupScreens.kt` — piece-11c-restore.zip
+- `app/build.gradle.kts` — piece-11d-backup-send.zip
+- `data/Backup.kt` — piece-11d-backup-send.zip
+- `ui/BackupScreens.kt` — piece-11d-backup-send.zip
 - `data/Restore.kt` — piece-11c-restore.zip
 - `ui/RestoreScreens.kt` — piece-11c-restore.zip
 - `ui/WorkerLearn.kt` — piece-10c-learn-worker.zip
-- `app/src/main/AndroidManifest.xml` — piece-09d-3-notifications.zip
+- `app/src/main/res/xml/file_paths.xml` — piece-11d-backup-send.zip
+- `app/src/main/AndroidManifest.xml` — piece-11d-backup-send.zip
 - `MainActivity.kt` — piece-09b-2-worker-import.zip
 - `data/CTDatabase.kt` — piece-08t3c-gifts.zip
 - `data/Daos.kt` — piece-10a-learn-manager.zip
@@ -713,8 +726,8 @@ Decisions:
 - `data/Security.kt` — piece-04c2-worker-proof.zip
 - `data/ServiceLocator.kt` — piece-10a-learn-manager.zip
 - `data/Sync.kt` — piece-10b-learn-send.zip
-- `data/Telegram.kt` — piece-10b-learn-send.zip
-- `data/Notify.kt` — piece-09d-3-notifications.zip
+- `data/Telegram.kt` — piece-11d-backup-send.zip
+- `data/Notify.kt` — piece-11d-backup-send.zip
 - `ui/TelegramScreens.kt` — piece-09c-1-original-pictures.zip
 - `ui/ShareInbox.kt` — piece-09b-2-worker-import.zip
 - `ui/WorkerIncoming.kt` — piece-09b-2-worker-import.zip
@@ -734,7 +747,7 @@ Decisions:
 - `ui/Components.kt` — piece-01-foundation.zip
 - `ui/Forms.kt` — piece-03-manager.zip
 - `ui/ManagerAccess.kt` — piece-05e-manager-access.zip
-- `ui/ManagerScreens.kt` — piece-11b-backup-export.zip
+- `ui/ManagerScreens.kt` — piece-11d-backup-send.zip
 - `ui/LearnManager.kt` — piece-10b-learn-send.zip
 - `ui/SupportManager.kt` — piece-09d-2b-support-manager.zip
 - `ui/NotifyScreens.kt` — piece-09d-3-notifications.zip
