@@ -61,8 +61,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 9D-2b | Support chat, manager screen: list of chats with unread badge, thread, reply (Telegram or copy) | DONE in piece-09d-2b-support-manager.zip (no DB change, app 38 / 0.37.0; needs 9D-2a; build result: check Actions) |
 | 9D-3 | Notifications: manager phone checks every ~15 min and shows counts; worker phone gets a daily "unsent items" reminder (WorkManager + notification permission) | DONE in piece-09d-3-notifications.zip (no DB change, app 39 / 0.38.0; needs 9D-2b; build result: check Actions) |
 | 10A | Learn & Earn, manager side: write, save as draft, publish / hide, delete lessons (text, category, picture link, video link) | DONE in piece-10a-learn-manager.zip (no DB change, app 40 / 0.39.0; needs 9D-3; build result: check Actions) |
-| 10B | Send lessons to workers: new M2W type LEARN (one signed message per lesson and worker, version-aware; hide = remove), via Telegram or copy | NEXT |
-| 10C | Worker Learn screen: list by category, read, open video/picture link, "read" tick; applies LEARN messages into `learn_content` | todo (needs 10B) |
+| 10B | Send lessons to workers: new M2W type LEARN (one signed message per lesson and worker, version-aware; hide = remove), via Telegram or copy | DONE in piece-10b-learn-send.zip (no DB change, app 41 / 0.40.0; needs 10A; build result: check Actions) |
+| 10C | Worker Learn screen: list by category, read, open video/picture link, "read" tick (LEARN messages are already applied into `learn_content` by 10B) | NEXT |
 (Announcements were already done in 9B-3.)
 | 11 | Backup / restore / migration | todo |
 | 12 | Premium polish & animations | todo |
@@ -83,7 +83,7 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 
 ## Rules for any AI continuing this
 1. Give complete files with exact paths, never snippets.
-2. Package each piece as `piece-NN-name.zip` (files at zip root as in the project). Keep pieces small enough to finish in one chat.
+2. Package each piece as `piece-NN-name.zip` (files at zip root as in the project). Keep pieces small enough to finish in one chat; if one is still too big, cut it again (see "SPLIT AGAIN" below the splitting trick).
 3. Do not restart or simplify the concept; if something can't be done yet, leave the architecture for it.
 4. After each piece: update this file, and ask the user to paste the GitHub Actions error log if the build fails.
 5. Keep honesty in the UI: automated checks flag, the manager decides.
@@ -99,6 +99,40 @@ Big pieces make a chat run out of room before the zip is finished. Do this every
 7. **Close the piece in this order:** zip -> update THIS file (status row, "what exists now", limits, next) -> tell the user which zips to upload to the next chat.
 8. **Tell the user what to upload next:** only `PROGRESS.md` and the zips of files the next part changes or depends on (see FILE OWNERS at the bottom: the latest zip that holds each file). When in doubt upload all zips; the sandbox unzips them in sorted order.
 9. **Keep this file short.** When a "what exists now" section is older than three pieces, shrink it to its API names and limits; the code is the source of truth.
+
+### SPLIT AGAIN — when a part is STILL too big (levels 2 and 3, any depth)
+Use this when the first split (a, b, c...) still leaves a part that would not fit in one chat. Cut again, and again, until each zip fits. A zip is "too big" if it has more than ~6 files, or more than ~700 lines of new Kotlin, or a file over ~350 lines, or two migrations. Say the new cut to the user in two lines, build the first zip only, and write what is left into PROGRESS.md ("Half-done" below).
+
+**Level 2 — cut by layer, bottom-up (every zip must compile ALONE).**
+1. `-1` data: entities + DAO + ONE migration + repository + pure formulas. No UI. It compiles because nothing calls it yet.
+2. `-2` leaf screens: NEW composables in NEW files. Nothing links to them yet, so they cannot break the app.
+3. `-3` wiring: only the tiny hooks into old files (one line per hook: a menu card, a route, a call), applied with the assert-once patch script.
+Rule: LEAF FIRST, CALLER LAST. Never ship a call to code that is in a later zip.
+
+**Level 3 — cut one big file into small files.** Split a long screen into `XxxA.kt`, `XxxB.kt` (each a leaf composable), ship them first, and ship the file that calls them last. Keep each file under ~350 lines.
+
+**The STUB trick (when two parts need each other).** The first zip ships a tiny stub in its own file, e.g. `ui/XStub.kt` containing `@Composable fun XSection(repos: Repos, actor: String) {}`, plus the hook that calls it. The later zip ships the real code at the SAME PATH (`ui/XStub.kt` replaced by the real `XSection`). Same path = newer zip wins, so nothing else changes and the app compiled in between. Never leave a stub when closing the last part; note every stub in "Half-done".
+
+**Zip names for sub-parts (this decides the build order, get it right).**
+- Key = 2-digit number, then a lowercase letter, then optional alternating digit / letter: `09d`, `09d2`, `09d2a`, `09d2a1`. Name = text after the key and a hyphen: `piece-09d2a1-support-data.zip`.
+- Siblings must differ at the SAME position with the SAME kind of character (digit vs digit, letter vs letter). No key may be the beginning of another key in the repo: when you split a part, the parent zip name is NOT used any more.
+- The name text never starts with a digit.
+- A fix zip takes the key of the zip it fixes + `-z-`: `piece-08b-z-fix-pickedfile.zip` sorts after `piece-08b-nc-statements.zip` and before `piece-08c`. Do not add a bare letter to a key that has none (`piece-07b-fix-...` next to `piece-07-payouts.zip` sorts BEFORE the payouts zip in locales that ignore punctuation, and would be overwritten; rename it `piece-07-z-fix-matchresult.zip` if the build ever shows the old error again).
+- Before shipping, check the order with `sortcheck.py` (below) using ALL zip names of the repo in build order. It must print OK.
+
+```
+import re, sys
+names = sys.argv[1:]                      # zip names in the order they must be built
+c_order = sorted(names)
+loc_order = sorted(names, key=lambda n: (re.sub(r'[^0-9a-z]', '', n.lower()), n))
+print("OK" if names == c_order == loc_order else "WRONG ORDER\n C : %s\n loc: %s" % (c_order, loc_order))
+```
+
+**Name-clash check (before zipping).** For every new top-level class, object, function, constant: `grep -rn "\bName\b"` in the merged project. A clash is a build error (this is what piece 7b fixed: `MatchResult`). Prefix new names with the feature (`TeamGift...`, `NcClaim...`).
+
+**Half-done note.** If a chat must stop in the middle of a split, close it cleanly: ship the last zip that compiles, then add a "Half-done" block to this file listing (1) zips shipped, (2) files NOT written yet with the exact public names and signatures they must expose, (3) hooks still missing (file + the exact line to add), (4) stubs to replace. The next chat starts from that block, not from memory.
+
+**Ask for the next upload the smart way.** After each sub-zip, tell the user the exact zips to upload next (see FILE OWNERS) and keep the list short; sub-parts that only add NEW files need only this file.
 
 ## Piece 2 — Data layer (what exists now)
 Files (package `com.ctteam.app.data`, folder `app/src/main/java/com/ctteam/app/data/`):
@@ -576,7 +610,18 @@ Zip: `piece-09d-3-notifications.zip` (sorts after `piece-09d-2b-support-manager.
 ## Piece 10A — Learn & Earn, manager side (what exists now)
 Zip: `piece-10a-learn-manager.zip` (sorts after `piece-09d-3-notifications.zip`). Files: `data/Learn.kt` (new `LearnRepository`: `save`, `setPublished`, `delete`; limits title 3–80, text up to 3000, category 30, links https only up to 300), `ui/LearnManager.kt` (new `ManagerLearnScreen`), `data/Daos.kt` (ContentDao: `observeAllLearn`, `learn(id)`, `deleteLearn`), `data/ServiceLocator.kt` (`repos.learn`), `ui/ManagerScreens.kt` (route `MgrRoute.Learn`, dashboard card "Learn & Earn"), `app/build.gradle.kts` (40 / 0.39.0). No schema change: the existing table `learn_content` is used (`version` rises on every content change or re-publish; `published` false = draft).
 - Audit: LEARN_CREATED / LEARN_EDITED / LEARN_PUBLISHED / LEARN_HIDDEN / LEARN_DELETED.
-- Plan for 10B: follow the NOTICE / SUPPORT_REPLY pattern in `data/Sync.kt` (`makeNotice`, `applyNotice`, `releaseSeq`) and `TelegramRepository.sendAnnouncement`. A LEARN message carries id, version, title, category, text, links, published flag; the worker keeps the highest version only; published=false removes it from the worker's list. Manager UI: SEND TO WORKERS button per lesson (Telegram to all linked chats, or copy one code per worker).
+- 10B (sending) is done, see "Piece 10B" below.
+
+## Piece 10B — Sending lessons to workers (what exists now)
+Zip: `piece-10b-learn-send.zip` (sorts after `piece-10a-learn-manager.zip`; no database change, DB stays v13; app 41 / 0.40.0). Files (all replaced, patched with assert-once edits): `data/Sync.kt`, `data/Telegram.kt`, `ui/LearnManager.kt`, `app/build.gradle.kts`.
+- New manager -> worker message type `SyncRepository.TYPE_LEARN = "LEARN"` (added to `WORKER_TYPES` and to the `receive` dispatch). Body: `id` (lesson id, `L-...`), `vs` version, `pb` 1 = published / 0 = take back, `tt` title (3-80), `ct` category (30), `tx` text (3000, empty when pb = 0), `im` picture link, `vd` video link (https only, 300), `at`.
+- Manager phone: `SyncRepository.makeLearn(workerId, lessonId, actor)` signs the SAVED lesson for one worker (own message number, audit `SYNC_LEARN_MADE`). `TelegramRepository.sendLesson(lessonId, actor)` does it for every linked chat (one message per worker, long ones go as one text file like every other message, a message number is handed back with `releaseSeq` when nothing at all reached the chat). Audit on the worker phone: `LEARN_RECEIVED` / `LEARN_TAKEN_BACK`.
+- Worker phone: `applyLearn` is version-aware: a lesson is used only if its version is HIGHER than the one in `learn_content` ("already up to date" otherwise, still counted as received). A take-back (hidden or draft lesson) keeps a record with `published = false` and empty text, so a late older message cannot bring the lesson back; 10C must show only `published = true` rows. Invalid messages (bad id, short title, empty text for a published lesson, non-https link) are refused without using the message number.
+- Manager screen (Manager > Learn & Earn > open a saved lesson): "Send to workers" card. SEND ON TELEGRAM TO ALL (two taps; needs a bot and at least one linked chat; shows how many went out and why others failed) and, for every connected worker, COPY CODE (one code for that worker, to paste in a private chat; they open it with Share or the "Use it" offer). Text tells the manager: the SAVED version is sent, save first; send again after every change; a hidden/draft lesson is taken back from phones that have it.
+- Limits: sending is manual (nothing goes out when you save or publish). Copying a code uses up a message number even if you never pass it on (the worker may then see a "gap" note, harmless). Lessons travel through Telegram when sent there (signed, so they cannot be forged, but Telegram can read them). On a single phone used as manager AND worker the lesson is already in the same table, so the message says "already up to date".
+- Not compile-tested (no Kotlin/Gradle in the sandbox). Brace balance and new names were checked against the whole project. If Actions fails, paste the error log.
+
+Next: 10C (worker Learn & Earn screen: reads `learn_content` where `published = 1`, list by category, read, open links with `LocalUriHandler`, a local "read" tick in `meta` keyed by lesson id and version, a card on the worker home).
 
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
@@ -601,7 +646,7 @@ Decisions:
 - Legal/honesty note for the owner: workers pool real money and see payout figures; keep all numbers as estimates and keep records transparent; check Uganda rules on pooled investments.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-10a-learn-manager.zip
+- `app/build.gradle.kts` — piece-10b-learn-send.zip
 - `app/src/main/AndroidManifest.xml` — piece-09d-3-notifications.zip
 - `MainActivity.kt` — piece-09b-2-worker-import.zip
 - `data/CTDatabase.kt` — piece-08t3c-gifts.zip
@@ -620,8 +665,8 @@ Decisions:
 - `data/ScreenshotChecks.kt` — piece-06-screenshot-verification.zip
 - `data/Security.kt` — piece-04c2-worker-proof.zip
 - `data/ServiceLocator.kt` — piece-10a-learn-manager.zip
-- `data/Sync.kt` — piece-09d-2a-support-worker.zip
-- `data/Telegram.kt` — piece-09d-3-notifications.zip
+- `data/Sync.kt` — piece-10b-learn-send.zip
+- `data/Telegram.kt` — piece-10b-learn-send.zip
 - `data/Notify.kt` — piece-09d-3-notifications.zip
 - `ui/TelegramScreens.kt` — piece-09c-1-original-pictures.zip
 - `ui/ShareInbox.kt` — piece-09b-2-worker-import.zip
@@ -643,7 +688,7 @@ Decisions:
 - `ui/Forms.kt` — piece-03-manager.zip
 - `ui/ManagerAccess.kt` — piece-05e-manager-access.zip
 - `ui/ManagerScreens.kt` — piece-10a-learn-manager.zip
-- `ui/LearnManager.kt` — piece-10a-learn-manager.zip
+- `ui/LearnManager.kt` — piece-10b-learn-send.zip
 - `ui/SupportManager.kt` — piece-09d-2b-support-manager.zip
 - `ui/NotifyScreens.kt` — piece-09d-3-notifications.zip
 - `ui/ManagerSyncScreens.kt` — piece-05e-manager-access.zip
