@@ -58,9 +58,9 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 9C-2 | Review screen, per screenshot: original received or not, SHA-256 match, dHash + hidden tags re-worked from the saved original and compared with the report, show the picture, ASK FOR THE ORIGINAL on Telegram | DONE in piece-09c-2-review-originals.zip (no DB change, app 35 / 0.34.0; needs 9C-1; build result: check Actions) |
 | 9D-1 | Weekly summaries (T4 text) sent on Telegram, one worker or all, once per worker per week | DONE in piece-09d-1-weekly-summaries.zip (no DB change, app 36 / 0.35.0; needs 9B-1; build result: check Actions) |
 | 9D-2a | Support chat, data + worker side: worker writes to the manager (rides in the normal report), manager's reply travels as a signed message and lands in the worker's chat | DONE in piece-09d-2a-support-worker.zip (no DB change, app 37 / 0.36.0; needs 9B-3; build result: check Actions) |
-| 9D-2b | Support chat, manager screen: list of chats with unread badge, thread, reply (Telegram or copy) | NEXT |
-| 9D-3 | Notifications (new item waiting for the manager; update for the worker); may need WorkManager + notification permission | todo |
-| 10 | Learn & Earn, announcements | todo |
+| 9D-2b | Support chat, manager screen: list of chats with unread badge, thread, reply (Telegram or copy) | DONE in piece-09d-2b-support-manager.zip (no DB change, app 38 / 0.37.0; needs 9D-2a; build result: check Actions) |
+| 9D-3 | Notifications: manager phone checks every ~15 min and shows counts; worker phone gets a daily "unsent items" reminder (WorkManager + notification permission) | DONE in piece-09d-3-notifications.zip (no DB change, app 39 / 0.38.0; needs 9D-2b; build result: check Actions) |
+| 10 | Learn & Earn, announcements | NEXT |
 | 11 | Backup / restore / migration | todo |
 | 12 | Premium polish & animations | todo |
 
@@ -529,7 +529,7 @@ Zip: `piece-09b-3-announcements.zip`. Files: `data/Sync.kt`, `data/Telegram.kt`,
 
 ### Limits (both)
 Telegram bot chats are not end-to-end encrypted: the messages are signed but readable by Telegram, and ENROLL/JOIN codes contain the worker's secret key. The worker must press START in the bot once. Sending only happens while the manager app is open and online. Not compile-tested here; if Actions fails, paste the error log (Room/KSP: no Java keywords as parameter names).
-Still to do: 9D-2b manager support screen, 9D-3 notifications.
+Still to do: nothing in piece 9 (9D-2b and 9D-3 are done).
 
 ## Piece 9C-1 — original pictures on Telegram (what exists now)
 Zip: `piece-09c-1-original-pictures.zip` (sorts after `piece-09b-3-announcements.zip`). Files: `data/Telegram.kt`, `data/ServiceLocator.kt` (`Repos(db, filesDir)`; `TelegramRepository` gets the folder `filesDir/originals`), `ui/TelegramScreens.kt`, `app/build.gradle.kts` (34 / 0.33.0). No database change.
@@ -556,7 +556,19 @@ Zip: `piece-09d-2a-support-worker.zip` (sorts after `piece-09d-1-weekly-summarie
 - New message types: `SUPPORT` (W2M; body id, tx up to 600 characters `NOTICE_MAX`, at) and `SUPPORT_REPLY` (M2W, same body). SUPPORT is a normal report item (`SUP:<id>` in the outbox): MAKE REPORT sends it with submissions etc., resends are harmless, the manager ignores an id it already has. Added to `collectItems` and `unsentCount`.
 - Worker: "Ask the manager" card (OPEN CHAT / thread of the last 8 / SAVE MESSAGE / CLOSE; max 20 unsent; opening marks the manager's replies read). `SyncRepository.askSupport`, `unsentSupportCount`.
 - Manager phone: `applySupport` stores the question as `TO_MANAGER` (unread). `makeSupportReply(workerId, text, actor)` signs a reply (next M2W number), `saveSupportReply` adds it to the thread AFTER it really left (sent on Telegram or copied) and marks the worker's messages read. `TelegramRepository.sendSupportReply` does it all for a linked chat (gives the number back if nothing was delivered, `releaseSeq`). The worker gets the reply like any update (Share / USE IT / paste) and `applySupportReply` adds it to their chat.
-- Not in this zip: the manager screen to read and answer (9D-2b). Until then questions are stored with unread status but cannot be read in the app.
+- Not in this zip: the manager screen to read and answer (9D-2b, see next section).
+
+## Piece 9D-2b — support chat, manager screen (what exists now)
+Zip: `piece-09d-2b-support-manager.zip` (sorts after `piece-09d-2a-support-worker.zip`). Files: `ui/SupportManager.kt` (new, `ManagerSupportScreen(repos, actor, onBack)`), `ui/ManagerScreens.kt` (route `MgrRoute.Support`, dashboard card "Support" with the unread number from `SupportDao.observeUnreadForManager()`), `app/build.gradle.kts` (38 / 0.37.0). No database change.
+- List: one card per worker, newest first, "● N new" in gold, last line + time. Opening a thread marks that worker's messages read (`markManagerRead`).
+- Thread: all messages oldest first, reply box (600 characters). SEND ON TELEGRAM (only when the worker has a linked chat and the bot is connected; `TelegramRepository.sendSupportReply`) or COPY REPLY CODE (`SyncRepository.makeSupportReply` + `saveSupportReply`; the reply joins the thread only after it was really sent or copied).
+
+## Piece 9D-3 — notifications (what exists now)
+Zip: `piece-09d-3-notifications.zip` (sorts after `piece-09d-2b-support-manager.zip`). Files: `data/Notify.kt` (new: `CTNotify`, `ManagerCheckWorker`, `WorkerReminderWorker`), `ui/NotifyScreens.kt` (new: `ManagerNotifyScreen`, `WorkerReminderCard`), `data/Telegram.kt` (+ `peekWaiting()`), `ui/ManagerScreens.kt` (route `MgrRoute.Notify`, dashboard card "Notifications"), `ui/WorkerScreens.kt` (reminder card on the worker home, under the support card), `AndroidManifest.xml` (`POST_NOTIFICATIONS`), `app/build.gradle.kts` (39 / 0.38.0, new dependency `androidx.work:work-runtime-ktx:2.9.0`). No database change; settings live in `meta` (keys in `CTNotify`).
+- Manager phone: off until switched on (Manager > Notifications). WorkManager periodic job every 15 min with internet (`ManagerCheckWorker`). It counts pending submissions, unread support messages and bot messages waiting. `TelegramRepository.peekWaiting()` only LOOKS (getUpdates with timeout 0, the saved offset is not moved, nothing is processed while signed out); it returns null if the app's own `pollLoop` is running (`loopLock.tryLock`) so two readers never clash. One notification, numbers only (no names/text); shown again only when a number goes UP since the last check (`notify:mgr:last`). Buttons: CHECK NOW, SEND A TEST NOTIFICATION, phone notification settings, app (battery) settings.
+- Worker phone: reminder card on the home screen (`WorkerReminderCard`). `WorkerReminderWorker` every ~6 h, no internet needed: if `SyncRepository.unsentCount(workerId)` > 0, one quiet notification at most every 20 h. Replies and updates from the manager already ring through Telegram itself, so no extra worker alert for those.
+- Android 13+ asks for the notification permission when the person turns a switch on.
+- Limits: Android may delay or stop background work on battery saver / aggressive phones (Tecno, Infinix, Xiaomi, Samsung): set the app to Unrestricted. Telegram keeps waiting messages about 24 h, so a manager who never opens the app for a day can miss them (workers can resend). Not compile-tested here.
 
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
@@ -581,8 +593,8 @@ Decisions:
 - Legal/honesty note for the owner: workers pool real money and see payout figures; keep all numbers as estimates and keep records transparent; check Uganda rules on pooled investments.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-08t4-leaderboard.zip
-- `app/src/main/AndroidManifest.xml` — piece-09b-2-worker-import.zip
+- `app/build.gradle.kts` — piece-09d-3-notifications.zip
+- `app/src/main/AndroidManifest.xml` — piece-09d-3-notifications.zip
 - `MainActivity.kt` — piece-09b-2-worker-import.zip
 - `data/CTDatabase.kt` — piece-08t3c-gifts.zip
 - `data/Daos.kt` — piece-09d-2a-support-worker.zip
@@ -600,7 +612,8 @@ Decisions:
 - `data/Security.kt` — piece-04c2-worker-proof.zip
 - `data/ServiceLocator.kt` — piece-08t4-leaderboard.zip
 - `data/Sync.kt` — piece-09d-2a-support-worker.zip
-- `data/Telegram.kt` — piece-09d-2a-support-worker.zip
+- `data/Telegram.kt` — piece-09d-3-notifications.zip
+- `data/Notify.kt` — piece-09d-3-notifications.zip
 - `ui/TelegramScreens.kt` — piece-09c-1-original-pictures.zip
 - `ui/ShareInbox.kt` — piece-09b-2-worker-import.zip
 - `ui/WorkerIncoming.kt` — piece-09b-2-worker-import.zip
@@ -620,7 +633,9 @@ Decisions:
 - `ui/Components.kt` — piece-01-foundation.zip
 - `ui/Forms.kt` — piece-03-manager.zip
 - `ui/ManagerAccess.kt` — piece-05e-manager-access.zip
-- `ui/ManagerScreens.kt` — piece-09c-2-review-originals.zip
+- `ui/ManagerScreens.kt` — piece-09d-3-notifications.zip
+- `ui/SupportManager.kt` — piece-09d-2b-support-manager.zip
+- `ui/NotifyScreens.kt` — piece-09d-3-notifications.zip
 - `ui/ManagerSyncScreens.kt` — piece-05e-manager-access.zip
 - `ui/NcMatchScreens.kt` — piece-08d-nc-matching.zip
 - `ui/NcScreens.kt` — piece-08d-nc-matching.zip
@@ -636,7 +651,7 @@ Decisions:
 - `ui/WorkerHistory.kt` — piece-04c3-worker-history.zip
 - `ui/WorkerNcClaim.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerPayout.kt` — piece-04c4-worker-payout.zip
-- `ui/WorkerScreens.kt` — piece-09d-2a-support-worker.zip
+- `ui/WorkerScreens.kt` — piece-09d-3-notifications.zip
 - `ui/WorkerSubmit.kt` — piece-08b-z-fix-pickedfile.zip
 - `ui/WorkerTasks.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerTeam.kt` — piece-08t3c-gifts.zip
