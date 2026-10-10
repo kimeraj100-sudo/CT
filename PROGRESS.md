@@ -62,9 +62,9 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 9D-3 | Notifications: manager phone checks every ~15 min and shows counts; worker phone gets a daily "unsent items" reminder (WorkManager + notification permission) | DONE in piece-09d-3-notifications.zip (no DB change, app 39 / 0.38.0; needs 9D-2b; build result: check Actions) |
 | 10A | Learn & Earn, manager side: write, save as draft, publish / hide, delete lessons (text, category, picture link, video link) | DONE in piece-10a-learn-manager.zip (no DB change, app 40 / 0.39.0; needs 9D-3; build result: check Actions) |
 | 10B | Send lessons to workers: new M2W type LEARN (one signed message per lesson and worker, version-aware; hide = remove), via Telegram or copy | DONE in piece-10b-learn-send.zip (no DB change, app 41 / 0.40.0; needs 10A; build result: check Actions) |
-| 10C | Worker Learn screen: list by category, read, open video/picture link, "read" tick (LEARN messages are already applied into `learn_content` by 10B) | NEXT |
+| 10C | Worker Learn screen: list by category, read, open video/picture link, "read" tick | DONE in piece-10c-learn-worker.zip (no DB change, app 42 / 0.41.0; needs 10B; build result: check Actions) |
 (Announcements were already done in 9B-3.)
-| 11 | Backup / restore / migration | todo |
+| 11 | Backup / restore / migration | NEXT |
 | 12 | Premium polish & animations | todo |
 
 ## What each piece contains
@@ -621,7 +621,15 @@ Zip: `piece-10b-learn-send.zip` (sorts after `piece-10a-learn-manager.zip`; no d
 - Limits: sending is manual (nothing goes out when you save or publish). Copying a code uses up a message number even if you never pass it on (the worker may then see a "gap" note, harmless). Lessons travel through Telegram when sent there (signed, so they cannot be forged, but Telegram can read them). On a single phone used as manager AND worker the lesson is already in the same table, so the message says "already up to date".
 - Not compile-tested (no Kotlin/Gradle in the sandbox). Brace balance and new names were checked against the whole project. If Actions fails, paste the error log.
 
-Next: 10C (worker Learn & Earn screen: reads `learn_content` where `published = 1`, list by category, read, open links with `LocalUriHandler`, a local "read" tick in `meta` keyed by lesson id and version, a card on the worker home).
+Next (10C is now DONE, see below): 10C (worker Learn & Earn screen: reads `learn_content` where `published = 1`, list by category, read, open links with `LocalUriHandler`, a local "read" tick in `meta` keyed by lesson id and version, a card on the worker home).
+
+## Piece 10C — Worker Learn & Earn screen (what exists now)
+Zip: `piece-10c-learn-worker.zip` (sorts after `piece-10b-learn-send.zip`; no database change, DB stays v13; app 42 / 0.41.0). Files: `ui/WorkerLearn.kt` (new: `WorkerLearnCard(repos, workerId)`), `ui/WorkerScreens.kt` (one hook: the card sits on the REAL worker home between the team board card and the support card; not in demo mode), `app/build.gradle.kts`.
+- Card: "Learn & Earn" with the count of lessons and how many are new or changed. Tap opens a full-screen dialog (back button: lesson -> list -> closed). List: category chips (only when there is more than one category; blank category = "General"), newest first, NEW / Read chip, 110-character preview, icons for video / picture. Lesson: title, category, time (EAT), the full text, OPEN VIDEO / OPEN PICTURE (https links only, shows the host first, a clear message if the phone cannot open it), MARK AS READ.
+- Reads `ContentDao.observeLearn()` (published = 1 only, so a taken-back lesson disappears). Read tick = `meta` key `learn:read:<workerId>:<lessonId>` with value = the lesson version; an edited lesson (higher version) shows as NEW again. Nothing is sent to the manager.
+- Limits: no search; the tick is local to the phone; images are links only (no in-app picture). Not compile-tested. If Actions fails, paste the error log.
+
+Next: Piece 11 (backup / restore / migration). It must also solve the main manager's lost password + PIN (see 4B limits).
 
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
@@ -646,7 +654,8 @@ Decisions:
 - Legal/honesty note for the owner: workers pool real money and see payout figures; keep all numbers as estimates and keep records transparent; check Uganda rules on pooled investments.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-10b-learn-send.zip
+- `app/build.gradle.kts` — piece-10c-learn-worker.zip
+- `ui/WorkerLearn.kt` — piece-10c-learn-worker.zip
 - `app/src/main/AndroidManifest.xml` — piece-09d-3-notifications.zip
 - `MainActivity.kt` — piece-09b-2-worker-import.zip
 - `data/CTDatabase.kt` — piece-08t3c-gifts.zip
@@ -706,7 +715,7 @@ Decisions:
 - `ui/WorkerHistory.kt` — piece-04c3-worker-history.zip
 - `ui/WorkerNcClaim.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerPayout.kt` — piece-04c4-worker-payout.zip
-- `ui/WorkerScreens.kt` — piece-09d-3-notifications.zip
+- `ui/WorkerScreens.kt` — piece-10c-learn-worker.zip
 - `ui/WorkerSubmit.kt` — piece-08b-z-fix-pickedfile.zip
 - `ui/WorkerTasks.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerTeam.kt` — piece-08t3c-gifts.zip
