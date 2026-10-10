@@ -73,8 +73,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 11e-3 | Migration, part 3: worker card "The manager has a new phone" (one tap: connection code + everything again) | DONE in piece-11e-3-worker-new-manager.zip (no DB change, app 49 / 0.48.0; needs 11e-2; build result: check Actions) |
 | 12a | Polish, touch feel: spring press-scale + light haptic on every button, chip and tappable card; cards fade/rise in; both off when phone animations are off | DONE in piece-12a-touch-feel.zip (no DB change, app 50 / 0.49.0; build result: check Actions) |
 | 12b-1 | Three-bar menu at the top right of the MANAGER dashboard: every screen grouped inside it, home keeps only the daily cards (owner request) | DONE in piece-12b-1-menu-manager.zip (no DB change, app 51 / 0.50.0; needs 12a; build result: check Actions) |
-| 12b-2 | The same three-bar menu on the WORKER home: move the less-used cards (team board, learn, reminder, notices history, payout number change...) into it | NEXT |
-| 12b-3 | Polish, motion between screens: manager screen changes slide/fade with direction, dashboard loading shimmer, count-up on the stat tiles, worker home the same | todo |
+| 12b-2 | The same three-bar menu on the WORKER home: team mining, learn, support, sync, payout number, reminder, security moved into it | DONE in piece-12b-2-menu-worker.zip (no DB change, app 52 / 0.51.0; needs 12b-1; build result: check Actions) |
+| 12b-3 | Polish, motion between screens: manager screen changes slide/fade with direction, dashboard loading shimmer, count-up on the stat tiles, worker home the same | NEXT |
 | 12c | Polish, finishing: empty states, success checkmark after approve / send, glass bottom bar idea (only if wanted) | todo |
 
 ## What each piece contains
@@ -704,6 +704,13 @@ Zip: `piece-12b-1-menu-manager.zip` (sorts after `piece-12a-touch-feel.zip`). Fi
 - Manager home now shows: header with the three bars at the right, stats, then the daily cards Review submissions, Workers, Tasks, Payouts, Support, and Recent activity. The menu lists everything in four groups (Daily work, Team and learning, Connections, Safety and access; Managers and Backup only for the main manager) with the same badges. A teal dot on the bars appears when something that is NOT on the home page waits (NC unmatched rows, Telegram items, backup overdue).
 - For 12b-2 reuse `MenuDrawer.kt` as it is; do not re-declare these names.
 
+## Piece 12b-2 — three-bar menu, worker home (what exists now)
+Zip: `piece-12b-2-menu-worker.zip` (sorts after `piece-12b-1-menu-manager.zip`). Files: `ui/WorkerScreens.kt`, `app/build.gradle.kts` (52 / 0.51.0). No database change. Uses `ui/MenuDrawer.kt` from 12b-1 unchanged.
+- `WorkerShell` got two optional parameters `menuGroups` and `menuDot`; when `menuGroups` is not empty the home header is `ScreenHeaderMenu` (three bars top right) and `HamburgerMenu` opens. The demo worker passes none, so it looks as before.
+- Real worker home keeps: incoming-update card, announcements, profile card, this week tiles, payout-in-progress card, MY TASKS, SUBMISSIONS & EARNINGS, REQUEST PAYOUT, BNB DEPOSIT CLAIMS, and a one-line hint about the menu.
+- Menu (groups Team and learning / Manager / My account): Team mining (team card + team board), Learn & Earn, Support (badge = unread replies), Sync (badge = items not yet sent, `SyncRepository.unsentCount`), Change payout number, Reminder, Security. Each opens as a page inside `WorkerHomeScreen` (state `section`, back arrow and the phone back button return to the home); the dot on the bars shows when support has unread replies or items are unsent.
+- Because a menu page replaces the home, the home's own state (open task etc.) restarts at the home page when a page is closed.
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
@@ -739,7 +746,7 @@ Files (zip: `piece-11d-backup-send.zip`; sorts after `piece-11c-restore.zip`): `
 Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-12b-1-menu-manager.zip
+- `app/build.gradle.kts` — piece-12b-2-menu-worker.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -809,7 +816,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/WorkerHistory.kt` — piece-04c3-worker-history.zip
 - `ui/WorkerNcClaim.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerPayout.kt` — piece-04c4-worker-payout.zip
-- `ui/WorkerScreens.kt` — piece-10c-learn-worker.zip
+- `ui/WorkerScreens.kt` — piece-12b-2-menu-worker.zip
 - `ui/WorkerSubmit.kt` — piece-08b-z-fix-pickedfile.zip
 - `ui/WorkerTasks.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerTeam.kt` — piece-08t3c-gifts.zip
