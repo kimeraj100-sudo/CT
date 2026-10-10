@@ -66,8 +66,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 (Announcements were already done in 9B-3.)
 | 11a | Main manager login built into the build: code name MAIN + password + PIN (hashes only) | DONE in piece-11a-main-login.zip (no DB change, app 43 / 0.42.0; build result: check Actions) |
 | 11b | Backup export: one encrypted, integrity-checked, versioned file (passphrase, AES-GCM, SHA-256 inside), saved with the file picker; CHECK A BACKUP FILE | DONE in piece-11b-backup-export.zip (no DB change, app 44 / 0.43.0; build result: check Actions) |
-| 11c | Restore: read + verify the file, preview (counts, date, app version), replace the data after a typed confirmation, restart | NEXT |
-| 11d | Send the backup to Telegram (own bot, as a document) / Drive / SD card through the share sheet; reminder when the last backup is old | todo |
+| 11c | Restore: read + verify the file, preview (counts now vs backup, age, warnings), typed RESTORE, safety copy, replace the database, sync numbers kept moving forward, restart, UNDO | DONE in piece-11c-restore.zip (no DB change, app 45 / 0.44.0; build result: check Actions) |
+| 11d | Send the backup to Telegram (own bot, as a document) / Drive / SD card through the share sheet; reminder when the last backup is old | NEXT |
 | 11e | Emergency migration to a new phone (worker keys, manager accounts, pin ledger, sync counters), tested against the 5A-5E rules | todo |
 | 12 | Premium polish & animations | todo |
 
@@ -194,7 +194,7 @@ Files (zip: `piece-04b-security.zip`, sorts AFTER `piece-04a-managers-worker.zip
 - `ui/ManagerAccess.kt` (replaced) — `ManagerAccessGate` now uses `CredentialGate`; Managers screen: ADD MANAGER = code name + PIN length (6/8/10) -> app makes the PIN, shows it ONCE with a "copy message to send" button; manager detail has RESET TO DEFAULT (tap twice, new PIN shown once).
 - `ui/ManagerScreens.kt` (replaced) — route `MySecurity`, dashboard card "My security", watchdog also signs a manager out when `credVersion` changed (reset or credentials changed elsewhere).
 - `ui/WorkerScreens.kt` (replaced) — `WorkerArea` phases: Register -> (Setup for pre-4B workers) -> Gate -> Home; registration now also asks username, password, PIN; home shows username and a change PIN/password card; the "coming next" card now says Piece 4C.
-- `app/build.gradle.kts` — piece-09d-2a-support-worker.zip
+- `app/build.gradle.kts` — piece-11c-restore.zip
 
 Rules implemented:
 - FULL sign-in = name (manager code name / worker username) + password + PIN. Needed first time on a phone and again every 30 days on that phone. QUICK unlock = only PIN OR only password, for 30 days after the last FULL sign-in on that phone (`device_trust`). Trust is void when `credVersion` changes (reset, password change, PIN change) or the manager taps "Forget this phone".
@@ -649,7 +649,17 @@ Zip: `piece-11b-backup-export.zip` (sorts after `piece-11a-main-login.zip`; no d
 - Screen (Manager > Backup, main manager only): last backup time, passphrase + repeat, CREATE BACKUP (system file picker: phone storage, SD card, Drive), CHECK A BACKUP FILE. Honest texts: no recovery if the passphrase is lost; original Telegram pictures (folder `originals`) are not inside.
 - Limits: a write by the app in the same instant as the copy can be missed (the next backup has it); the whole file is held in memory (hence 64 MB); notification/WorkManager settings and the `originals` folder are not saved. Not compile-tested. If Actions fails, paste the error log.
 
-## Piece 11 plan (c–e, decided with the owner; build 11c next)
+## Piece 11c — Restore (what exists now)
+Zip: `piece-11c-restore.zip` (sorts after `piece-11b-backup-export.zip`; no database change; app 45 / 0.44.0). Files: `data/Restore.kt` (new), `ui/RestoreScreens.kt` (new), `ui/BackupScreens.kt` (one line: `RestoreSection` before the message line), `app/build.gradle.kts`.
+- Where: Manager > Backup (main manager only, same gate as 11b). Card "Restore from a backup": passphrase, CHOOSE BACKUP FILE (file picker, max 64 MB), then a PREVIEW (nothing changed yet): made-at (EAT), app build, database version, a table "now -> in the backup" for workers, tasks, submissions, payout requests, payments, NC rows, NC claims, manager accounts, audit log (red when the phone has more than the backup), and warnings (age in days, rows that will be lost, older database version is upgraded, sign in with the managers INSIDE the backup, workers keep working). Then type `RESTORE` (exact, capitals) and RESTORE NOW.
+- `BackupRestorer(db)` (not in `Repos`; the screen makes it): `preview(context, bytes, pass)`, `restore(context, bytes, pass, actor): RestoreOutcome(ok, message, restart)`, `undo(context, actor)`, `safetyTime(context)`. Order: `BackupFormat.open` (passphrase + GCM + SHA-256) -> refuse a backup whose Room DB version is NEWER than this app's -> write the DB to `ctteam.db.restore-tmp` next to the real file -> SQLite `integrity_check` -> in that temp file only: move sync counters forward and append a hash-chained audit row (`BACKUP_RESTORED`, or `RESTORE_UNDONE`) and set meta `restore:lastAt` / `restore:fromCreated` -> WAL checkpoint -> SAFETY COPY of the live database (`filesDir/restore-safety/ctteam-before-restore.db`, one slot; the live DB is checkpointed first, size is verified) -> `db.close()`, delete `-wal`/`-shm`/`-journal`, rename the temp file over `ctteam.db` (copy fallback; if placing fails the safety copy is put back) -> `CTRestart.now` (`Intent.makeRestartActivityTask` + process exit after 300 ms).
+- SYNC NUMBERS (important, 5A–5E rule): replay protection is a set of seen message numbers, so an OLD backup would make the manager phone reuse numbers the workers already accepted and every new update would be refused as a copy. Before the swap the app reads the LIVE counters and, in the new file, sets every `sync:out:M2W:<worker>` to max(restored, live) + 20; other `sync:out:*` keys and `tg:offset` get max(restored, live). Workers see, once, a harmless note that some updates "have not arrived". Not recoverable by design: reports the manager imported AFTER the backup are forgotten, so a worker can send the same report again; items carry their own ids, so nothing is counted twice.
+- UNDO: card "Undo the last restore" appears while a safety copy exists; type `UNDO`; the same install routine puts it back and keeps what it replaces as the new safety copy (so undo can itself be undone).
+- After the restart the manager signs in with the manager names, passwords and PINs that exist inside the backup (the built-in MAIN login applies only to a new, empty install). The Telegram token is part of the database and comes back with it.
+- Limits / honest notes: the whole file and database are held in memory (64 MB limit). The `originals` picture folder is not part of a backup and is not touched by a restore. In the 300 ms between closing the database and the process ending, a screen that was still reading the old database could in theory show a crash; the data is already correct and the next start is clean. Auto-restart can be blocked by some phones; the text tells the user to open the app again. Not compile-tested (no Kotlin/Gradle in the sandbox); brace balance and public-name uniqueness were checked. If Actions fails, paste the error log.
+- Next: 11d (send the backup to Telegram/Drive/SD, old-backup reminder), then 11e (emergency migration to a new phone), then 12.
+
+## Piece 11 plan (c–e, decided with the owner; 11c is done, build 11d next)
 11b: data -> one file. Simplest safe design: checkpoint the Room database (`PRAGMA wal_checkpoint(TRUNCATE)`), copy `ctteam.db`, zip it with a small header JSON (format version, app versionCode, DB version, created time, table row counts), encrypt with AES-256-GCM using a key from the owner's passphrase (PBKDF2-HMAC-SHA256, 200 000 iterations, random salt), SHA-256 of the plain bytes in the header (checked on restore). Saved through the Android file picker (create document) and offered to the share sheet. File name `ctteam-backup-YYYYMMDD-HHmm.ctb`. Screen: Manager > Backup, only the main manager. Photos of proofs (files) are NOT in the database: say so, or include the proofs folder as a second part if small enough.
 11c: restore only on the main manager's phone: pick file, passphrase, verify GCM tag + SHA-256, show the preview, typed confirmation "RESTORE", close the database, replace the files, restart the app. A backup from a NEWER DB version is refused; an older one is migrated by Room as usual.
 11d: send the same file to Telegram as a document (9A bot), plus "last backup" age on the dashboard with a reminder after 7 days (reuse the 9D-3 notification worker).
@@ -680,7 +690,9 @@ Decisions:
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
 - `app/build.gradle.kts` — piece-11b-backup-export.zip
 - `data/Backup.kt` — piece-11b-backup-export.zip
-- `ui/BackupScreens.kt` — piece-11b-backup-export.zip
+- `ui/BackupScreens.kt` — piece-11c-restore.zip
+- `data/Restore.kt` — piece-11c-restore.zip
+- `ui/RestoreScreens.kt` — piece-11c-restore.zip
 - `ui/WorkerLearn.kt` — piece-10c-learn-worker.zip
 - `app/src/main/AndroidManifest.xml` — piece-09d-3-notifications.zip
 - `MainActivity.kt` — piece-09b-2-worker-import.zip
