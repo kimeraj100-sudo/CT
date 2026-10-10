@@ -65,8 +65,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 10C | Worker Learn screen: list by category, read, open video/picture link, "read" tick | DONE in piece-10c-learn-worker.zip (no DB change, app 42 / 0.41.0; needs 10B; build result: check Actions) |
 (Announcements were already done in 9B-3.)
 | 11a | Main manager login built into the build: code name MAIN + password + PIN (hashes only) | DONE in piece-11a-main-login.zip (no DB change, app 43 / 0.42.0; build result: check Actions) |
-| 11b | Backup export: one encrypted, integrity-checked, versioned file (passphrase, AES-GCM, SHA-256 inside) saved to phone storage / shared | NEXT |
-| 11c | Restore: read + verify the file, preview (counts, date, app version), replace the data after a typed confirmation, restart | todo |
+| 11b | Backup export: one encrypted, integrity-checked, versioned file (passphrase, AES-GCM, SHA-256 inside), saved with the file picker; CHECK A BACKUP FILE | DONE in piece-11b-backup-export.zip (no DB change, app 44 / 0.43.0; build result: check Actions) |
+| 11c | Restore: read + verify the file, preview (counts, date, app version), replace the data after a typed confirmation, restart | NEXT |
 | 11d | Send the backup to Telegram (own bot, as a document) / Drive / SD card through the share sheet; reminder when the last backup is old | todo |
 | 11e | Emergency migration to a new phone (worker keys, manager accounts, pin ledger, sync counters), tested against the 5A-5E rules | todo |
 | 12 | Premium polish & animations | todo |
@@ -642,7 +642,14 @@ Zip: `piece-11a-main-login.zip` (sorts after `piece-10c-learn-worker.zip`; no da
 - Both can still be changed in Manager > My security. Honest limit: anyone who gets the APK can try to guess the password and PIN offline from the hashes (the 6-digit PIN is the weak part). A longer PIN and a longer password make that much harder. A manager phone that trusts another phone's main manager (5E) has no main account of its own and is not affected.
 - Lost password AND PIN after changing them: there is still no in-app way back; Piece 11b/11c (backup and restore) is the answer, plus reinstalling gives the built-in login again (but empty data).
 
-## Piece 11 plan (b–e, decided with the owner; build 11b next)
+## Piece 11b — Backup export (what exists now)
+Zip: `piece-11b-backup-export.zip` (sorts after `piece-11a-main-login.zip`; no database change; app 44 / 0.43.0). Files: `data/Backup.kt` (new), `ui/BackupScreens.kt` (new), `ui/ManagerScreens.kt` (route `MgrRoute.Backup`, dashboard card "Backup" for the main manager only), `app/build.gradle.kts`.
+- `BackupFormat` (pure, tested in a Python port: wrong passphrase and a flipped byte are both refused): file `CTBK` + version 1 + salt 16 + nonce 12 + AES-256-GCM of `[4-byte header length][header JSON][database bytes]`, key = PBKDF2-HMAC-SHA256 200 000 iterations; magic is the GCM AAD. Header: `fmt`, `app`, `db` (Room version), `created`, `bytes`, `sha256` of the database, `counts` (rows per main table). `BackupFormat.seal(dbBytes, headerJson, pass)`, `BackupFormat.open(file, pass): Outcome<BackupOpened(header, db)>` (decrypt + sha + size check), `BackupFormat.infoOf(header)`, `passError` (10-64 chars, letters + a digit). Limit 64 MB database.
+- `BackupRepository(db, audit)`: `export(context, passphrase, out, actor)` (WAL checkpoint, copy `ctteam.db`, open the COPY and run SQLite `integrity_check`, seal, write, meta `backup:lastAt` / `backup:lastBytes`, audit `BACKUP_EXPORTED` without the passphrase), `check(context, fileBytes, passphrase)` (full verification, changes nothing), `lastBackupAt()`, `readLimited(stream, limit)`. 11c reuses `BackupFormat.open` and then replaces the database file.
+- Screen (Manager > Backup, main manager only): last backup time, passphrase + repeat, CREATE BACKUP (system file picker: phone storage, SD card, Drive), CHECK A BACKUP FILE. Honest texts: no recovery if the passphrase is lost; original Telegram pictures (folder `originals`) are not inside.
+- Limits: a write by the app in the same instant as the copy can be missed (the next backup has it); the whole file is held in memory (hence 64 MB); notification/WorkManager settings and the `originals` folder are not saved. Not compile-tested. If Actions fails, paste the error log.
+
+## Piece 11 plan (c–e, decided with the owner; build 11c next)
 11b: data -> one file. Simplest safe design: checkpoint the Room database (`PRAGMA wal_checkpoint(TRUNCATE)`), copy `ctteam.db`, zip it with a small header JSON (format version, app versionCode, DB version, created time, table row counts), encrypt with AES-256-GCM using a key from the owner's passphrase (PBKDF2-HMAC-SHA256, 200 000 iterations, random salt), SHA-256 of the plain bytes in the header (checked on restore). Saved through the Android file picker (create document) and offered to the share sheet. File name `ctteam-backup-YYYYMMDD-HHmm.ctb`. Screen: Manager > Backup, only the main manager. Photos of proofs (files) are NOT in the database: say so, or include the proofs folder as a second part if small enough.
 11c: restore only on the main manager's phone: pick file, passphrase, verify GCM tag + SHA-256, show the preview, typed confirmation "RESTORE", close the database, replace the files, restart the app. A backup from a NEWER DB version is refused; an older one is migrated by Room as usual.
 11d: send the same file to Telegram as a document (9A bot), plus "last backup" age on the dashboard with a reminder after 7 days (reuse the 9D-3 notification worker).
@@ -671,7 +678,9 @@ Decisions:
 - Legal/honesty note for the owner: workers pool real money and see payout figures; keep all numbers as estimates and keep records transparent; check Uganda rules on pooled investments.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-11a-main-login.zip
+- `app/build.gradle.kts` — piece-11b-backup-export.zip
+- `data/Backup.kt` — piece-11b-backup-export.zip
+- `ui/BackupScreens.kt` — piece-11b-backup-export.zip
 - `ui/WorkerLearn.kt` — piece-10c-learn-worker.zip
 - `app/src/main/AndroidManifest.xml` — piece-09d-3-notifications.zip
 - `MainActivity.kt` — piece-09b-2-worker-import.zip
@@ -713,7 +722,7 @@ Decisions:
 - `ui/Components.kt` — piece-01-foundation.zip
 - `ui/Forms.kt` — piece-03-manager.zip
 - `ui/ManagerAccess.kt` — piece-05e-manager-access.zip
-- `ui/ManagerScreens.kt` — piece-10a-learn-manager.zip
+- `ui/ManagerScreens.kt` — piece-11b-backup-export.zip
 - `ui/LearnManager.kt` — piece-10b-learn-send.zip
 - `ui/SupportManager.kt` — piece-09d-2b-support-manager.zip
 - `ui/NotifyScreens.kt` — piece-09d-3-notifications.zip
