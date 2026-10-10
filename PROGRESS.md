@@ -69,9 +69,11 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 11c | Restore: read + verify the file, preview (counts now vs backup, age, warnings), typed RESTORE, safety copy, replace the database, sync numbers kept moving forward, restart, UNDO | DONE in piece-11c-restore.zip (no DB change, app 45 / 0.44.0; build result: check Actions) |
 | 11d | Send the backup to Telegram (own bot, as a document) / Drive / SD card through the share sheet; reminder when the last backup is old | DONE in piece-11d-backup-send.zip (no DB change, app 46 / 0.45.0; build result: check Actions) |
 | 11e-1 | Migration, part 1: message numbers stay in step after a restore or a new manager phone (worker tells the manager the last number it received) | DONE in piece-11e-1-number-sync.zip (no DB change, app 47 / 0.46.0; needs 11d; build result: check Actions) |
-| 11e-2 | Migration, part 2: manager screen "Move to a new phone" (step list with live checks) + RETIRE THIS PHONE (stops Telegram reading, notifications and sign-in on the old phone) | NEXT |
-| 11e-3 | Migration, part 3: worker card "The manager has a new phone" (one tap: connection code + everything again) | todo |
-| 12 | Premium polish & animations | todo |
+| 11e-2 | Migration, part 2: manager screen "Move to a new phone" (step list with live checks) + RETIRE THIS PHONE (stops Telegram reading, notifications and sign-in on the old phone) | DONE in piece-11e-2-move-phone.zip (no DB change, app 48 / 0.47.0; needs 11e-1; build result: check Actions) |
+| 11e-3 | Migration, part 3: worker card "The manager has a new phone" (one tap: connection code + everything again) | DONE in piece-11e-3-worker-new-manager.zip (no DB change, app 49 / 0.48.0; needs 11e-2; build result: check Actions) |
+| 12a | Polish, touch feel: spring press-scale + light haptic on every button, chip and tappable card; cards fade/rise in; both off when phone animations are off | DONE in piece-12a-touch-feel.zip (no DB change, app 50 / 0.49.0; build result: check Actions) |
+| 12b | Polish, motion between screens: manager screen changes slide/fade with direction, dashboard loading shimmer, count-up on the stat tiles, worker home the same | NEXT |
+| 12c | Polish, finishing: empty states, success checkmark after approve / send, glass bottom bar idea (only if wanted) | todo |
 
 ## What each piece contains
 1. **Foundation** — compiling project, fixed signing key, launcher icon from the approved logo, jewel theme, animated logo opening with gold light-sweep, Manager/Worker choice screen, different transition per button.
@@ -196,7 +198,7 @@ Files (zip: `piece-04b-security.zip`, sorts AFTER `piece-04a-managers-worker.zip
 - `ui/ManagerAccess.kt` (replaced) — `ManagerAccessGate` now uses `CredentialGate`; Managers screen: ADD MANAGER = code name + PIN length (6/8/10) -> app makes the PIN, shows it ONCE with a "copy message to send" button; manager detail has RESET TO DEFAULT (tap twice, new PIN shown once).
 - `ui/ManagerScreens.kt` (replaced) — route `MySecurity`, dashboard card "My security", watchdog also signs a manager out when `credVersion` changed (reset or credentials changed elsewhere).
 - `ui/WorkerScreens.kt` (replaced) — `WorkerArea` phases: Register -> (Setup for pre-4B workers) -> Gate -> Home; registration now also asks username, password, PIN; home shows username and a change PIN/password card; the "coming next" card now says Piece 4C.
-- `app/build.gradle.kts` — piece-11e-1-number-sync.zip
+- `app/build.gradle.kts` — piece-12a-touch-feel.zip
 
 Rules implemented:
 - FULL sign-in = name (manager code name / worker username) + password + PIN. Needed first time on a phone and again every 30 days on that phone. QUICK unlock = only PIN OR only password, for 30 days after the last FULL sign-in on that phone (`device_trust`). Trust is void when `credVersion` changes (reset, password change, PIN change) or the manager taps "Forget this phone".
@@ -676,6 +678,25 @@ Why: replay protection means a worker phone accepts each manager message number 
 - Effect: after any restore or phone change the first report each worker sends fixes the manager's numbering by itself; no manual step. Until that report arrives, an update sent early may be refused by the worker as "Already received" and must be sent again (SEND EVERYTHING AGAIN).
 - Limits: it does not bring back data the manager phone lost (tasks, payouts, manager accounts: that is what the backup is for). A worker who never reports keeps the old gap.
 
+## Piece 11e-2 — Move to a new phone + RETIRE (what exists now)
+Zip: `piece-11e-2-move-phone.zip` (sorts after `piece-11e-1-number-sync.zip`). Files: `data/Migrate.kt` (new: `PhoneMove`, `MoveStatus`), `ui/MigrateScreens.kt` (new: `PhoneMoveSection`, `RetiredPhoneScreen`), `ui/BackupScreens.kt` (one line: the section under "Restore from a backup"), `ui/ManagerScreens.kt` (retired gate in `ManagerArea`), `data/Notify.kt` (the manager check does nothing on a retired phone), `app/build.gradle.kts` (48 / 0.47.0). No database change; the flag is `meta` key `phone:retired` (millis; empty = not retired).
+- Manager > Backup (main manager only) > card "Move to a new phone" > OPEN THE STEPS: numbered steps for the OLD phone (fresh backup, check the file), the NEW phone (install, Restore, switch notifications off/on because the WorkManager schedule is not in a backup, check the Telegram bot is reading), then RETIRE; what workers do (nothing: their next report re-aligns numbers, see 11e-1); the NO-BACKUP path (sign in as MAIN, workers re-enroll with the same key and send "Everything"; tasks, payments, manager accounts and team data are lost); the LOST/STOLEN path (revoke the bot token in @BotFather, change passwords and PINs, honest limit below). Live checks: last backup time (warns when overdue), connected workers, bot connected/paused, notifications on/off.
+- RETIRE THIS PHONE (type `RETIRE`): `PhoneMove.retire` switches the manager notification check off, pauses Telegram (`TG_PAUSED`), sets `phone:retired`, audits `PHONE_RETIRED`. A signed-in manager is signed out within 2 s. A retired phone shows "Phone retired" instead of the manager sign-in (`RetiredPhoneScreen`), with USE THIS PHONE AGAIN (type `USE AGAIN`; audits `PHONE_UNRETIRED`; Telegram and notifications stay OFF until switched on again). Nothing is deleted. The worker side of the same phone is not affected.
+- Honest limits: a backup made AFTER retiring carries the flag and would retire the phone it is restored on (the retired screen has the unlock). Worker secret keys are stored in the database and cannot be changed yet: a lost phone whose data is opened lets someone forge messages for workers (a later piece could rotate worker keys). A lost phone's 30-day quick unlock cannot be revoked remotely. Not compile-tested. If Actions fails, paste the error log.
+
+## Piece 11e-3 — worker card "The manager has a new phone?" (what exists now)
+Zip: `piece-11e-3-worker-new-manager.zip` (sorts after `piece-11e-2-move-phone.zip`). Files: `ui/SyncScreens.kt` (new private `NewManagerPhoneCard` at the end of `WorkerSyncCard`), `app/build.gradle.kts` (49 / 0.48.0). No database change.
+- Worker home > Sync cards: collapsed card (OPEN). PREPARE BOTH FOR THE NEW PHONE makes (1) the connection code (`makeEnrollment`: same secret key, now also carries the last manager number received, 11e-1) and (2) a report with EVERYTHING (`makeReport(SCOPE_ALL)`: same message numbers as before, so the new manager phone ignores nothing it needs and counts nothing twice). Both show with the usual copy / share / save-as-file buttons. Order printed on the card: connection code first (the manager approves it and reads the key code by phone), then every report part. Also tells the worker to press START in a NEW Telegram bot if the manager has one.
+- Worker secret key is NOT changed by this; if the manager's phone was lost or stolen, key rotation is still missing (see 11e-2 limits).
+- Piece 11 is complete (11a-11e). Next: 12 (premium polish and animations).
+
+## Piece 12a — touch feel (what exists now)
+Zip: `piece-12a-touch-feel.zip` (sorts after `piece-11e-3-worker-new-manager.zip`). Files: `ui/Motion.kt` (new), `ui/Components.kt` (GoldButton, GlassCard), `ui/Forms.kt` (GhostButton, CTChip), `app/build.gradle.kts` (50 / 0.49.0). No new dependency, no database change.
+- `Motion.kt`: `ctReduceMotion()` (true when the phone's animator duration scale is 0), `CTPress` + `rememberCTPress(pressedScale, onClick)` (shared `MutableInteractionSource`, a spring-animated scale and a light haptic tick before the real `onClick`), `Modifier.ctScale(press)`, and `Modifier.ctEnter(delayMs)` (fade in + rise 12 dp, 360 ms, once).
+- Used in: GoldButton (scale 0.96), GhostButton (0.96), CTChip (0.94), GlassCard (tappable ones scale 0.985; every card fades/rises in once). The ripple is kept (same order of modifiers as before: scale, clip, fill, clickable). Every tap still calls exactly the same function as before.
+- Honest notes: cards inside a list that appear later (new item) animate in too; with "Remove animations" on the phone everything is instant and there is no scale. Not compile-tested. If Actions fails, paste the error log.
+- Build lesson: an edit script once truncated `Forms.kt` (opened it for writing before reading it); the file was restored from `piece-03-manager.zip` (its only owner) and re-patched. The zip contains the full, correct file.
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
@@ -713,7 +734,9 @@ Next: 11e (emergency migration to a new phone), then 12.
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
 - `app/build.gradle.kts` — piece-11d-backup-send.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
-- `ui/BackupScreens.kt` — piece-11d-backup-send.zip
+- `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
+- `data/Migrate.kt` — piece-11e-2-move-phone.zip
+- `ui/MigrateScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Restore.kt` — piece-11c-restore.zip
 - `ui/RestoreScreens.kt` — piece-11c-restore.zip
 - `ui/WorkerLearn.kt` — piece-10c-learn-worker.zip
@@ -738,12 +761,13 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `data/ServiceLocator.kt` — piece-10a-learn-manager.zip
 - `data/Sync.kt` — piece-11e-1-number-sync.zip
 - `data/Telegram.kt` — piece-11d-backup-send.zip
-- `data/Notify.kt` — piece-11d-backup-send.zip
+- `data/Notify.kt` — piece-11e-2-move-phone.zip
 - `ui/TelegramScreens.kt` — piece-09c-1-original-pictures.zip
 - `ui/ShareInbox.kt` — piece-09b-2-worker-import.zip
 - `ui/WorkerIncoming.kt` — piece-09b-2-worker-import.zip
 - `ui/WorkerNotices.kt` — piece-09b-3-announcements.zip
 - `ui/OriginalCheck.kt` — piece-09c-2-review-originals.zip
+- `ui/Motion.kt` — piece-12a-touch-feel.zip
 - `ui/Support.kt` — piece-09d-2a-support-worker.zip
 - `data/Team.kt` — piece-08t3a-mined-days.zip
 - `data/TeamBoard.kt` — piece-08t4-leaderboard.zip
@@ -755,10 +779,10 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `data/Util.kt` — piece-02-data.zip
 - `data/Verification.kt` — piece-06-screenshot-verification.zip
 - `ui/CTApp.kt` — piece-09b-2-worker-import.zip
-- `ui/Components.kt` — piece-01-foundation.zip
-- `ui/Forms.kt` — piece-03-manager.zip
+- `ui/Components.kt` — piece-12a-touch-feel.zip
+- `ui/Forms.kt` — piece-12a-touch-feel.zip
 - `ui/ManagerAccess.kt` — piece-05e-manager-access.zip
-- `ui/ManagerScreens.kt` — piece-11d-backup-send.zip
+- `ui/ManagerScreens.kt` — piece-11e-2-move-phone.zip
 - `ui/LearnManager.kt` — piece-10b-learn-send.zip
 - `ui/SupportManager.kt` — piece-09d-2b-support-manager.zip
 - `ui/NotifyScreens.kt` — piece-09d-3-notifications.zip
@@ -768,7 +792,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/PayoutScreens.kt` — piece-08a-pdf-reader.zip
 - `ui/Screens.kt` — piece-03-manager.zip
 - `ui/SecurityScreens.kt` — piece-04c1-worker-tasks.zip
-- `ui/SyncScreens.kt` — piece-09b-2-worker-import.zip
+- `ui/SyncScreens.kt` — piece-11e-3-worker-new-manager.zip
 - `ui/TeamGiftScreens.kt` — piece-08t3c-gifts.zip
 - `ui/TeamGoalScreens.kt` — piece-08t3b-goal-rigs.zip
 - `ui/TeamScreens.kt` — piece-08t4-leaderboard.zip
