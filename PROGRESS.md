@@ -55,7 +55,7 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 9B-2 | Worker side: Android share target (Telegram > Share > CT Team), automatic import on the worker phone, clipboard "USE IT" offer, reset code fills itself | DONE in piece-09b-2-worker-import.zip (no DB change, app 32 / 0.31.0; needs 9B-1 in the repo; build result: check Actions) |
 | 9B-3 | Announcements: one message, signed separately per worker, sent to every linked Telegram chat; shows on the worker's home screen | DONE in piece-09b-3-announcements.zip (no DB change, app 33 / 0.32.0; needs 9B-1 and 9B-2; build result: check Actions) |
 | 9C-1 | Originals: a worker sends the picture to the bot as a FILE; the manager app downloads it, works out SHA-256, saves it, compares with the reports, logs the result | DONE in piece-09c-1-original-pictures.zip (no DB change, app 34 / 0.33.0; needs 9A; build result: check Actions) |
-| 9C-2 | Review screen shows per proof: original received / not received / fingerprint matches; re-checks dHash + hidden tags on the saved original; shows the picture; "ask for the original" message on Telegram; worker hint | NEXT |
+| 9C-2 | Review screen, per screenshot: original received or not, SHA-256 match, dHash + hidden tags re-worked from the saved original and compared with the report, show the picture, ASK FOR THE ORIGINAL on Telegram | DONE in piece-09c-2-review-originals.zip (no DB change, app 35 / 0.34.0; needs 9C-1; build result: check Actions) |
 | 9D | Support chat (history in the app), weekly summaries and notifications by Telegram | todo |
 | 10 | Learn & Earn, announcements | todo |
 | 11 | Backup / restore / migration | todo |
@@ -150,7 +150,7 @@ Files (zip: `piece-04b-security.zip`, sorts AFTER `piece-04a-managers-worker.zip
 - `ui/ManagerAccess.kt` (replaced) — `ManagerAccessGate` now uses `CredentialGate`; Managers screen: ADD MANAGER = code name + PIN length (6/8/10) -> app makes the PIN, shows it ONCE with a "copy message to send" button; manager detail has RESET TO DEFAULT (tap twice, new PIN shown once).
 - `ui/ManagerScreens.kt` (replaced) — route `MySecurity`, dashboard card "My security", watchdog also signs a manager out when `credVersion` changed (reset or credentials changed elsewhere).
 - `ui/WorkerScreens.kt` (replaced) — `WorkerArea` phases: Register -> (Setup for pre-4B workers) -> Gate -> Home; registration now also asks username, password, PIN; home shows username and a change PIN/password card; the "coming next" card now says Piece 4C.
-- `app/build.gradle.kts` — piece-09c-1-original-pictures.zip
+- `app/build.gradle.kts` — piece-09c-2-review-originals.zip
 
 Rules implemented:
 - FULL sign-in = name (manager code name / worker username) + password + PIN. Needed first time on a phone and again every 30 days on that phone. QUICK unlock = only PIN OR only password, for 30 days after the last FULL sign-in on that phone (`device_trust`). Trust is void when `credVersion` changes (reset, password change, PIN change) or the manager taps "Forget this phone".
@@ -500,7 +500,7 @@ Limits: Telegram bot chats are not end-to-end encrypted (messages stay signed bu
 Plan for the rest: 9B sends M2W updates/replies/announcements to the linked chat (`sendMessage` for short codes, `sendDocument` of a `.txt` for long ones) and adds an Android share target so a worker taps a received file/message to import it into the app; 9C original screenshots (`sendDocument` from the worker, download on the manager phone, compare SHA-256 with the report, extend Piece 6 verdicts); 9D support chat, weekly summaries (T4 text) and notifications.
 
 ## Piece 9B — split in two zips (what exists now)
-Zip names (sort after `piece-09a-telegram-reader.zip`, before `piece-10-...`): `piece-09b-1-telegram-send.zip`, `piece-09b-2-worker-import.zip`. Upload both; 9B-2 needs 9B-1 (it overwrites `ui/SyncScreens.kt` with a version that has the same Telegram buttons plus the reset-code auto-fill). No database change.
+Zip names (sort after `piece-09a-telegram-reader.zip`, before `piece-10-...`): `piece-09b-1-telegram-send.zip`, `piece-09b-2-worker-import.zip`. Upload ALL of 9B-1, 9B-2, 9B-3 and 9C-1, 9C-2 (9C-1's Telegram.kt calls code from 9B-3, so skipping one breaks the build); 9B-2 needs 9B-1 (it overwrites `ui/SyncScreens.kt` with a version that has the same Telegram buttons plus the reset-code auto-fill). No database change.
 
 ### 9B-1 — manager sends on Telegram (app 31 / 0.30.0)
 Files: `data/Telegram.kt`, `data/Sync.kt`, `ui/SyncScreens.kt`, `ui/TelegramScreens.kt`, `app/build.gradle.kts`.
@@ -526,7 +526,7 @@ Zip: `piece-09b-3-announcements.zip`. Files: `data/Sync.kt`, `data/Telegram.kt`,
 
 ### Limits (both)
 Telegram bot chats are not end-to-end encrypted: the messages are signed but readable by Telegram, and ENROLL/JOIN codes contain the worker's secret key. The worker must press START in the bot once. Sending only happens while the manager app is open and online. Not compile-tested here; if Actions fails, paste the error log (Room/KSP: no Java keywords as parameter names).
-Still to do: 9C-2 review screen, 9D support chat / weekly summaries / notifications.
+Still to do: 9D support chat / weekly summaries / notifications.
 
 ## Piece 9C-1 — original pictures on Telegram (what exists now)
 Zip: `piece-09c-1-original-pictures.zip` (sorts after `piece-09b-3-announcements.zip`). Files: `data/Telegram.kt`, `data/ServiceLocator.kt` (`Repos(db, filesDir)`; `TelegramRepository` gets the folder `filesDir/originals`), `ui/TelegramScreens.kt`, `app/build.gradle.kts` (34 / 0.33.0). No database change.
@@ -534,6 +534,13 @@ Zip: `piece-09c-1-original-pictures.zip` (sorts after `piece-09b-3-announcements
 - Manager phone (reading loop, only from a chat linked to a worker; strangers ignored): picture documents (image/* or .png .jpg .jpeg .webp .heic, up to 20 MB, the Telegram bot limit) are downloaded, SHA-256 computed HERE, saved as `originals/<sha>.img` (stops saving at 400 MB total; the result is still recorded), and kept in `meta` key `orig:<sha>` (JSON: w worker, n file name, s size, at time, f saved?). Read with `TelegramRepository.originalOf(sha)` and `originalFile(sha)`.
 - Compared at once with `proofs.sha256`: same worker = log "Original matches the report"; the hash is in another worker's report = red log "File belongs to another worker's report"; no report has it yet = saved and logged (it will match after the report is imported; the lookup is by hash, so order does not matter). Audit `TG_ORIGINAL_MATCH`, `TG_ORIGINAL_OTHER_WORKER`, `TG_ORIGINAL_UNMATCHED`. New log kinds `ORIGINAL`, `ORIGINAL_BAD`.
 - Honest limit: a match proves the file is the SAME one the report names. It does not prove the picture is genuine (an edited picture would match its own hash). 9C-2 therefore re-derives dHash and hidden tags from the saved original on the manager phone and compares them with what the report claimed.
+
+## Piece 9C-2 — originals in the review screen (what exists now)
+Zip: `piece-09c-2-review-originals.zip` (sorts after `piece-09c-1-original-pictures.zip`). Files: `ui/OriginalCheck.kt` (new, `OriginalProofBlock`), `ui/ManagerScreens.kt` (one line in `ReviewDetail`: the block under each screenshot with a fingerprint), `app/build.gradle.kts` (35 / 0.34.0). No database change, no Telegram.kt change.
+- Not received: orange "Original: not received yet" + ASK FOR THE ORIGINAL ON TELEGRAM (needs a linked chat; plain message through `sendCodes`, not signed: it asks for the file as a FILE, not a photo).
+- Received (`originalOf(sha)`): green "very same file as in the report"; red line if it came from another worker's chat. If the file is saved, `ProofAnalyzer.dHash` and `ProofAnalyzer.tags` are run again on the manager phone and compared with the report's `dhash` / `metadataTags` (different = red "✖ ... DIFFERENT from what was reported"; report without dHash = nothing to compare). SHOW THE ORIGINAL opens it down-scaled (longest side about 1400 px) / HIDE.
+- Evidence only: nothing changes the verdict or decides; honesty text stays (a match does not prove the picture is genuine).
+- Still not done: a worker-side hint inside the app that says "send the original as a file" (the ask message says it); automatic ask for every doubtful proof; 9D.
 
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
@@ -582,6 +589,7 @@ Decisions:
 - `ui/ShareInbox.kt` — piece-09b-2-worker-import.zip
 - `ui/WorkerIncoming.kt` — piece-09b-2-worker-import.zip
 - `ui/WorkerNotices.kt` — piece-09b-3-announcements.zip
+- `ui/OriginalCheck.kt` — piece-09c-2-review-originals.zip
 - `data/Team.kt` — piece-08t3a-mined-days.zip
 - `data/TeamBoard.kt` — piece-08t4-leaderboard.zip
 - `ui/TeamBoardScreens.kt` — piece-08t4-leaderboard.zip
@@ -595,7 +603,7 @@ Decisions:
 - `ui/Components.kt` — piece-01-foundation.zip
 - `ui/Forms.kt` — piece-03-manager.zip
 - `ui/ManagerAccess.kt` — piece-05e-manager-access.zip
-- `ui/ManagerScreens.kt` — piece-09b-2-worker-import.zip
+- `ui/ManagerScreens.kt` — piece-09c-2-review-originals.zip
 - `ui/ManagerSyncScreens.kt` — piece-05e-manager-access.zip
 - `ui/NcMatchScreens.kt` — piece-08d-nc-matching.zip
 - `ui/NcScreens.kt` — piece-08d-nc-matching.zip
