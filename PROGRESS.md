@@ -64,7 +64,11 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 10B | Send lessons to workers: new M2W type LEARN (one signed message per lesson and worker, version-aware; hide = remove), via Telegram or copy | DONE in piece-10b-learn-send.zip (no DB change, app 41 / 0.40.0; needs 10A; build result: check Actions) |
 | 10C | Worker Learn screen: list by category, read, open video/picture link, "read" tick | DONE in piece-10c-learn-worker.zip (no DB change, app 42 / 0.41.0; needs 10B; build result: check Actions) |
 (Announcements were already done in 9B-3.)
-| 11 | Backup / restore / migration | NEXT |
+| 11a | Main manager login built into the build: code name MAIN + password + PIN (hashes only) | DONE in piece-11a-main-login.zip (no DB change, app 43 / 0.42.0; build result: check Actions) |
+| 11b | Backup export: one encrypted, integrity-checked, versioned file (passphrase, AES-GCM, SHA-256 inside) saved to phone storage / shared | NEXT |
+| 11c | Restore: read + verify the file, preview (counts, date, app version), replace the data after a typed confirmation, restart | todo |
+| 11d | Send the backup to Telegram (own bot, as a document) / Drive / SD card through the share sheet; reminder when the last backup is old | todo |
+| 11e | Emergency migration to a new phone (worker keys, manager accounts, pin ledger, sync counters), tested against the 5A-5E rules | todo |
 | 12 | Premium polish & animations | todo |
 
 ## What each piece contains
@@ -631,6 +635,19 @@ Zip: `piece-10c-learn-worker.zip` (sorts after `piece-10b-learn-send.zip`; no da
 
 Next: Piece 11 (backup / restore / migration). It must also solve the main manager's lost password + PIN (see 4B limits).
 
+## Piece 11a — Main manager login built into the build (what exists now)
+Zip: `piece-11a-main-login.zip` (sorts after `piece-10c-learn-worker.zip`; no database change; app 43 / 0.42.0). Files: `data/ManagerAccounts.kt` (`ensureMain`, new constants `SEED_PASS_SALT`, `SEED_PASS_HASH`, `SEED_PIN_FINGERPRINT`), `app/build.gradle.kts`.
+- A new install creates the main manager already ACTIVATED: code name `MAIN`, the owner's chosen password and the seed PIN, all stored only as salted PBKDF2 hashes (the password and the PIN are NOT in the source as text). The seed PIN also goes into `pin_ledger`, so no manager can ever be issued it. The first sign-in on a phone is the full one (code name + password + PIN) and then the 30-day quick unlock applies.
+- An older install where the main manager never finished activating (never signed in with a password, `credVersion` 1, seed PIN still in place) gets the built-in password at the next app start (audit `MAIN_MANAGER_BUILTIN_PASSWORD`). An install where the main manager already chose their own password keeps it.
+- Both can still be changed in Manager > My security. Honest limit: anyone who gets the APK can try to guess the password and PIN offline from the hashes (the 6-digit PIN is the weak part). A longer PIN and a longer password make that much harder. A manager phone that trusts another phone's main manager (5E) has no main account of its own and is not affected.
+- Lost password AND PIN after changing them: there is still no in-app way back; Piece 11b/11c (backup and restore) is the answer, plus reinstalling gives the built-in login again (but empty data).
+
+## Piece 11 plan (b–e, decided with the owner; build 11b next)
+11b: data -> one file. Simplest safe design: checkpoint the Room database (`PRAGMA wal_checkpoint(TRUNCATE)`), copy `ctteam.db`, zip it with a small header JSON (format version, app versionCode, DB version, created time, table row counts), encrypt with AES-256-GCM using a key from the owner's passphrase (PBKDF2-HMAC-SHA256, 200 000 iterations, random salt), SHA-256 of the plain bytes in the header (checked on restore). Saved through the Android file picker (create document) and offered to the share sheet. File name `ctteam-backup-YYYYMMDD-HHmm.ctb`. Screen: Manager > Backup, only the main manager. Photos of proofs (files) are NOT in the database: say so, or include the proofs folder as a second part if small enough.
+11c: restore only on the main manager's phone: pick file, passphrase, verify GCM tag + SHA-256, show the preview, typed confirmation "RESTORE", close the database, replace the files, restart the app. A backup from a NEWER DB version is refused; an older one is migrated by Room as usual.
+11d: send the same file to Telegram as a document (9A bot), plus "last backup" age on the dashboard with a reminder after 7 days (reuse the 9D-3 notification worker).
+11e: emergency migration: what must move to a new phone (manager accounts and credVersion, pin_ledger, per-worker keys, sync counters `sync:out:*`, last-seen numbers), and what a worker does when the manager's phone changes. Check against the 5A-5E rules before building.
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
@@ -654,7 +671,7 @@ Decisions:
 - Legal/honesty note for the owner: workers pool real money and see payout figures; keep all numbers as estimates and keep records transparent; check Uganda rules on pooled investments.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-10c-learn-worker.zip
+- `app/build.gradle.kts` — piece-11a-main-login.zip
 - `ui/WorkerLearn.kt` — piece-10c-learn-worker.zip
 - `app/src/main/AndroidManifest.xml` — piece-09d-3-notifications.zip
 - `MainActivity.kt` — piece-09b-2-worker-import.zip
@@ -662,7 +679,7 @@ Decisions:
 - `data/Daos.kt` — piece-10a-learn-manager.zip
 - `data/Learn.kt` — piece-10a-learn-manager.zip
 - `data/Entities.kt` — piece-08c-nc-claims.zip
-- `data/ManagerAccounts.kt` — piece-05e-manager-access.zip
+- `data/ManagerAccounts.kt` — piece-11a-main-login.zip
 - `data/ManagerSync.kt` — piece-05e-manager-access.zip
 - `data/NcMatcher.kt` — piece-08d-nc-matching.zip
 - `data/NcRepository.kt` — piece-08t1-team-ledger.zip
