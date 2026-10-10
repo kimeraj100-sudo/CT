@@ -60,7 +60,10 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 9D-2a | Support chat, data + worker side: worker writes to the manager (rides in the normal report), manager's reply travels as a signed message and lands in the worker's chat | DONE in piece-09d-2a-support-worker.zip (no DB change, app 37 / 0.36.0; needs 9B-3; build result: check Actions) |
 | 9D-2b | Support chat, manager screen: list of chats with unread badge, thread, reply (Telegram or copy) | DONE in piece-09d-2b-support-manager.zip (no DB change, app 38 / 0.37.0; needs 9D-2a; build result: check Actions) |
 | 9D-3 | Notifications: manager phone checks every ~15 min and shows counts; worker phone gets a daily "unsent items" reminder (WorkManager + notification permission) | DONE in piece-09d-3-notifications.zip (no DB change, app 39 / 0.38.0; needs 9D-2b; build result: check Actions) |
-| 10 | Learn & Earn, announcements | NEXT |
+| 10A | Learn & Earn, manager side: write, save as draft, publish / hide, delete lessons (text, category, picture link, video link) | DONE in piece-10a-learn-manager.zip (no DB change, app 40 / 0.39.0; needs 9D-3; build result: check Actions) |
+| 10B | Send lessons to workers: new M2W type LEARN (one signed message per lesson and worker, version-aware; hide = remove), via Telegram or copy | NEXT |
+| 10C | Worker Learn screen: list by category, read, open video/picture link, "read" tick; applies LEARN messages into `learn_content` | todo (needs 10B) |
+(Announcements were already done in 9B-3.)
 | 11 | Backup / restore / migration | todo |
 | 12 | Premium polish & animations | todo |
 
@@ -570,6 +573,11 @@ Zip: `piece-09d-3-notifications.zip` (sorts after `piece-09d-2b-support-manager.
 - Android 13+ asks for the notification permission when the person turns a switch on.
 - Limits: Android may delay or stop background work on battery saver / aggressive phones (Tecno, Infinix, Xiaomi, Samsung): set the app to Unrestricted. Telegram keeps waiting messages about 24 h, so a manager who never opens the app for a day can miss them (workers can resend). Not compile-tested here.
 
+## Piece 10A — Learn & Earn, manager side (what exists now)
+Zip: `piece-10a-learn-manager.zip` (sorts after `piece-09d-3-notifications.zip`). Files: `data/Learn.kt` (new `LearnRepository`: `save`, `setPublished`, `delete`; limits title 3–80, text up to 3000, category 30, links https only up to 300), `ui/LearnManager.kt` (new `ManagerLearnScreen`), `data/Daos.kt` (ContentDao: `observeAllLearn`, `learn(id)`, `deleteLearn`), `data/ServiceLocator.kt` (`repos.learn`), `ui/ManagerScreens.kt` (route `MgrRoute.Learn`, dashboard card "Learn & Earn"), `app/build.gradle.kts` (40 / 0.39.0). No schema change: the existing table `learn_content` is used (`version` rises on every content change or re-publish; `published` false = draft).
+- Audit: LEARN_CREATED / LEARN_EDITED / LEARN_PUBLISHED / LEARN_HIDDEN / LEARN_DELETED.
+- Plan for 10B: follow the NOTICE / SUPPORT_REPLY pattern in `data/Sync.kt` (`makeNotice`, `applyNotice`, `releaseSeq`) and `TelegramRepository.sendAnnouncement`. A LEARN message carries id, version, title, category, text, links, published flag; the worker keeps the highest version only; published=false removes it from the worker's list. Manager UI: SEND TO WORKERS button per lesson (Telegram to all linked chats, or copy one code per worker).
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
@@ -593,11 +601,12 @@ Decisions:
 - Legal/honesty note for the owner: workers pool real money and see payout figures; keep all numbers as estimates and keep records transparent; check Uganda rules on pooled investments.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-09d-3-notifications.zip
+- `app/build.gradle.kts` — piece-10a-learn-manager.zip
 - `app/src/main/AndroidManifest.xml` — piece-09d-3-notifications.zip
 - `MainActivity.kt` — piece-09b-2-worker-import.zip
 - `data/CTDatabase.kt` — piece-08t3c-gifts.zip
-- `data/Daos.kt` — piece-09d-2a-support-worker.zip
+- `data/Daos.kt` — piece-10a-learn-manager.zip
+- `data/Learn.kt` — piece-10a-learn-manager.zip
 - `data/Entities.kt` — piece-08c-nc-claims.zip
 - `data/ManagerAccounts.kt` — piece-05e-manager-access.zip
 - `data/ManagerSync.kt` — piece-05e-manager-access.zip
@@ -610,7 +619,7 @@ Decisions:
 - `data/Repositories.kt` — piece-02-data.zip
 - `data/ScreenshotChecks.kt` — piece-06-screenshot-verification.zip
 - `data/Security.kt` — piece-04c2-worker-proof.zip
-- `data/ServiceLocator.kt` — piece-08t4-leaderboard.zip
+- `data/ServiceLocator.kt` — piece-10a-learn-manager.zip
 - `data/Sync.kt` — piece-09d-2a-support-worker.zip
 - `data/Telegram.kt` — piece-09d-3-notifications.zip
 - `data/Notify.kt` — piece-09d-3-notifications.zip
@@ -633,7 +642,8 @@ Decisions:
 - `ui/Components.kt` — piece-01-foundation.zip
 - `ui/Forms.kt` — piece-03-manager.zip
 - `ui/ManagerAccess.kt` — piece-05e-manager-access.zip
-- `ui/ManagerScreens.kt` — piece-09d-3-notifications.zip
+- `ui/ManagerScreens.kt` — piece-10a-learn-manager.zip
+- `ui/LearnManager.kt` — piece-10a-learn-manager.zip
 - `ui/SupportManager.kt` — piece-09d-2b-support-manager.zip
 - `ui/NotifyScreens.kt` — piece-09d-3-notifications.zip
 - `ui/ManagerSyncScreens.kt` — piece-05e-manager-access.zip
