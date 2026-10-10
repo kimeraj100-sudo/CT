@@ -72,7 +72,9 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 11e-2 | Migration, part 2: manager screen "Move to a new phone" (step list with live checks) + RETIRE THIS PHONE (stops Telegram reading, notifications and sign-in on the old phone) | DONE in piece-11e-2-move-phone.zip (no DB change, app 48 / 0.47.0; needs 11e-1; build result: check Actions) |
 | 11e-3 | Migration, part 3: worker card "The manager has a new phone" (one tap: connection code + everything again) | DONE in piece-11e-3-worker-new-manager.zip (no DB change, app 49 / 0.48.0; needs 11e-2; build result: check Actions) |
 | 12a | Polish, touch feel: spring press-scale + light haptic on every button, chip and tappable card; cards fade/rise in; both off when phone animations are off | DONE in piece-12a-touch-feel.zip (no DB change, app 50 / 0.49.0; build result: check Actions) |
-| 12b | Polish, motion between screens: manager screen changes slide/fade with direction, dashboard loading shimmer, count-up on the stat tiles, worker home the same | NEXT |
+| 12b-1 | Three-bar menu at the top right of the MANAGER dashboard: every screen grouped inside it, home keeps only the daily cards (owner request) | DONE in piece-12b-1-menu-manager.zip (no DB change, app 51 / 0.50.0; needs 12a; build result: check Actions) |
+| 12b-2 | The same three-bar menu on the WORKER home: move the less-used cards (team board, learn, reminder, notices history, payout number change...) into it | NEXT |
+| 12b-3 | Polish, motion between screens: manager screen changes slide/fade with direction, dashboard loading shimmer, count-up on the stat tiles, worker home the same | todo |
 | 12c | Polish, finishing: empty states, success checkmark after approve / send, glass bottom bar idea (only if wanted) | todo |
 
 ## What each piece contains
@@ -697,6 +699,11 @@ Zip: `piece-12a-touch-feel.zip` (sorts after `piece-11e-3-worker-new-manager.zip
 - Honest notes: cards inside a list that appear later (new item) animate in too; with "Remove animations" on the phone everything is instant and there is no scale. Not compile-tested. If Actions fails, paste the error log.
 - Build lesson: an edit script once truncated `Forms.kt` (opened it for writing before reading it); the file was restored from `piece-03-manager.zip` (its only owner) and re-patched. The zip contains the full, correct file.
 
+## Piece 12b-1 — three-bar menu, manager home (what exists now)
+Zip: `piece-12b-1-menu-manager.zip` (sorts after `piece-12a-touch-feel.zip`). Files: `ui/MenuDrawer.kt` (new, reusable: `HamburgerItem(title, subtitle, badge, onClick)`, `HamburgerGroup(title, items)`, `HamburgerButton(dot, onClick)`, `ScreenHeaderMenu(title, onBack, dot, onMenu)`, `HamburgerMenu(title, groups, onClose)` = full-screen Dialog, choosing an item closes it then navigates), `ui/ManagerScreens.kt` (dashboard only), `app/build.gradle.kts` (51 / 0.50.0). No database change.
+- Manager home now shows: header with the three bars at the right, stats, then the daily cards Review submissions, Workers, Tasks, Payouts, Support, and Recent activity. The menu lists everything in four groups (Daily work, Team and learning, Connections, Safety and access; Managers and Backup only for the main manager) with the same badges. A teal dot on the bars appears when something that is NOT on the home page waits (NC unmatched rows, Telegram items, backup overdue).
+- For 12b-2 reuse `MenuDrawer.kt` as it is; do not re-declare these names.
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
@@ -732,7 +739,7 @@ Files (zip: `piece-11d-backup-send.zip`; sorts after `piece-11c-restore.zip`): `
 Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-11d-backup-send.zip
+- `app/build.gradle.kts` — piece-12b-1-menu-manager.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -782,7 +789,8 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/Components.kt` — piece-12a-touch-feel.zip
 - `ui/Forms.kt` — piece-12a-touch-feel.zip
 - `ui/ManagerAccess.kt` — piece-05e-manager-access.zip
-- `ui/ManagerScreens.kt` — piece-11e-2-move-phone.zip
+- `ui/ManagerScreens.kt` — piece-12b-1-menu-manager.zip
+- `ui/MenuDrawer.kt` — piece-12b-1-menu-manager.zip
 - `ui/LearnManager.kt` — piece-10b-learn-send.zip
 - `ui/SupportManager.kt` — piece-09d-2b-support-manager.zip
 - `ui/NotifyScreens.kt` — piece-09d-3-notifications.zip
