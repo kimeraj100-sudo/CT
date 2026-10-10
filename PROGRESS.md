@@ -57,7 +57,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 9C-1 | Originals: a worker sends the picture to the bot as a FILE; the manager app downloads it, works out SHA-256, saves it, compares with the reports, logs the result | DONE in piece-09c-1-original-pictures.zip (no DB change, app 34 / 0.33.0; needs 9A; build result: check Actions) |
 | 9C-2 | Review screen, per screenshot: original received or not, SHA-256 match, dHash + hidden tags re-worked from the saved original and compared with the report, show the picture, ASK FOR THE ORIGINAL on Telegram | DONE in piece-09c-2-review-originals.zip (no DB change, app 35 / 0.34.0; needs 9C-1; build result: check Actions) |
 | 9D-1 | Weekly summaries (T4 text) sent on Telegram, one worker or all, once per worker per week | DONE in piece-09d-1-weekly-summaries.zip (no DB change, app 36 / 0.35.0; needs 9B-1; build result: check Actions) |
-| 9D-2 | Support chat: worker asks, manager answers, history kept in the app (table `support_messages` already exists), over Telegram/share | NEXT |
+| 9D-2a | Support chat, data + worker side: worker writes to the manager (rides in the normal report), manager's reply travels as a signed message and lands in the worker's chat | DONE in piece-09d-2a-support-worker.zip (no DB change, app 37 / 0.36.0; needs 9B-3; build result: check Actions) |
+| 9D-2b | Support chat, manager screen: list of chats with unread badge, thread, reply (Telegram or copy) | NEXT |
 | 9D-3 | Notifications (new item waiting for the manager; update for the worker); may need WorkManager + notification permission | todo |
 | 10 | Learn & Earn, announcements | todo |
 | 11 | Backup / restore / migration | todo |
@@ -152,7 +153,7 @@ Files (zip: `piece-04b-security.zip`, sorts AFTER `piece-04a-managers-worker.zip
 - `ui/ManagerAccess.kt` (replaced) — `ManagerAccessGate` now uses `CredentialGate`; Managers screen: ADD MANAGER = code name + PIN length (6/8/10) -> app makes the PIN, shows it ONCE with a "copy message to send" button; manager detail has RESET TO DEFAULT (tap twice, new PIN shown once).
 - `ui/ManagerScreens.kt` (replaced) — route `MySecurity`, dashboard card "My security", watchdog also signs a manager out when `credVersion` changed (reset or credentials changed elsewhere).
 - `ui/WorkerScreens.kt` (replaced) — `WorkerArea` phases: Register -> (Setup for pre-4B workers) -> Gate -> Home; registration now also asks username, password, PIN; home shows username and a change PIN/password card; the "coming next" card now says Piece 4C.
-- `app/build.gradle.kts` — piece-09d-1-weekly-summaries.zip
+- `app/build.gradle.kts` — piece-09d-2a-support-worker.zip
 
 Rules implemented:
 - FULL sign-in = name (manager code name / worker username) + password + PIN. Needed first time on a phone and again every 30 days on that phone. QUICK unlock = only PIN OR only password, for 30 days after the last FULL sign-in on that phone (`device_trust`). Trust is void when `credVersion` changes (reset, password change, PIN change) or the manager taps "Forget this phone".
@@ -528,7 +529,7 @@ Zip: `piece-09b-3-announcements.zip`. Files: `data/Sync.kt`, `data/Telegram.kt`,
 
 ### Limits (both)
 Telegram bot chats are not end-to-end encrypted: the messages are signed but readable by Telegram, and ENROLL/JOIN codes contain the worker's secret key. The worker must press START in the bot once. Sending only happens while the manager app is open and online. Not compile-tested here; if Actions fails, paste the error log (Room/KSP: no Java keywords as parameter names).
-Still to do: 9D-2 support chat, 9D-3 notifications.
+Still to do: 9D-2b manager support screen, 9D-3 notifications.
 
 ## Piece 9C-1 — original pictures on Telegram (what exists now)
 Zip: `piece-09c-1-original-pictures.zip` (sorts after `piece-09b-3-announcements.zip`). Files: `data/Telegram.kt`, `data/ServiceLocator.kt` (`Repos(db, filesDir)`; `TelegramRepository` gets the folder `filesDir/originals`), `ui/TelegramScreens.kt`, `app/build.gradle.kts` (34 / 0.33.0). No database change.
@@ -549,6 +550,13 @@ Zip: `piece-09d-1-weekly-summaries.zip` (sorts after `piece-09c-2-review-origina
 - Manager > Team > "Weekly summary text": pick a worker, the existing COPY / SHARE stay; new SEND ON TELEGRAM (button reads SEND AGAIN when this week's was already sent) for workers with a linked chat; and SEND LAST WEEK'S SUMMARY TO ALL ON TELEGRAM (n not sent this week), two taps to confirm. The text is `TeamBoardRepository.weeklySummary` (last Monday-Sunday), plain text, NOT signed and not imported by the worker app (just a chat message).
 - "Sent this week" is kept in `meta` key `tg:weekly:<workerId>` = the week key of the day it was sent. Failed sends are not marked, so they are offered again. The activity log in Manager > Telegram shows each send (`TG_SENT` audit).
 - Not done: scheduled/automatic weekly sending (needs 9D-3 background work); the SPEC's weekly file of all transactions.
+
+## Piece 9D-2a — support chat, data and worker side (what exists now)
+Zip: `piece-09d-2a-support-worker.zip` (sorts after `piece-09d-1-weekly-summaries.zip`). Files: `data/Daos.kt` (SupportDao: new queries only, no schema change), `data/Sync.kt`, `data/Telegram.kt`, `ui/Support.kt` (new, `WorkerSupportCard`), `ui/WorkerScreens.kt` (card on the worker home under the team board), `app/build.gradle.kts` (37 / 0.36.0). The existing table `support_messages` is used as it is; the shared message id is kept in its `telegramMessageId` column (same id on both phones, so nothing is stored twice).
+- New message types: `SUPPORT` (W2M; body id, tx up to 600 characters `NOTICE_MAX`, at) and `SUPPORT_REPLY` (M2W, same body). SUPPORT is a normal report item (`SUP:<id>` in the outbox): MAKE REPORT sends it with submissions etc., resends are harmless, the manager ignores an id it already has. Added to `collectItems` and `unsentCount`.
+- Worker: "Ask the manager" card (OPEN CHAT / thread of the last 8 / SAVE MESSAGE / CLOSE; max 20 unsent; opening marks the manager's replies read). `SyncRepository.askSupport`, `unsentSupportCount`.
+- Manager phone: `applySupport` stores the question as `TO_MANAGER` (unread). `makeSupportReply(workerId, text, actor)` signs a reply (next M2W number), `saveSupportReply` adds it to the thread AFTER it really left (sent on Telegram or copied) and marks the worker's messages read. `TelegramRepository.sendSupportReply` does it all for a linked chat (gives the number back if nothing was delivered, `releaseSeq`). The worker gets the reply like any update (Share / USE IT / paste) and `applySupportReply` adds it to their chat.
+- Not in this zip: the manager screen to read and answer (9D-2b). Until then questions are stored with unread status but cannot be read in the app.
 
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
@@ -577,7 +585,7 @@ Decisions:
 - `app/src/main/AndroidManifest.xml` — piece-09b-2-worker-import.zip
 - `MainActivity.kt` — piece-09b-2-worker-import.zip
 - `data/CTDatabase.kt` — piece-08t3c-gifts.zip
-- `data/Daos.kt` — piece-08d-nc-matching.zip
+- `data/Daos.kt` — piece-09d-2a-support-worker.zip
 - `data/Entities.kt` — piece-08c-nc-claims.zip
 - `data/ManagerAccounts.kt` — piece-05e-manager-access.zip
 - `data/ManagerSync.kt` — piece-05e-manager-access.zip
@@ -591,13 +599,14 @@ Decisions:
 - `data/ScreenshotChecks.kt` — piece-06-screenshot-verification.zip
 - `data/Security.kt` — piece-04c2-worker-proof.zip
 - `data/ServiceLocator.kt` — piece-08t4-leaderboard.zip
-- `data/Sync.kt` — piece-09b-3-announcements.zip
-- `data/Telegram.kt` — piece-09c-1-original-pictures.zip
+- `data/Sync.kt` — piece-09d-2a-support-worker.zip
+- `data/Telegram.kt` — piece-09d-2a-support-worker.zip
 - `ui/TelegramScreens.kt` — piece-09c-1-original-pictures.zip
 - `ui/ShareInbox.kt` — piece-09b-2-worker-import.zip
 - `ui/WorkerIncoming.kt` — piece-09b-2-worker-import.zip
 - `ui/WorkerNotices.kt` — piece-09b-3-announcements.zip
 - `ui/OriginalCheck.kt` — piece-09c-2-review-originals.zip
+- `ui/Support.kt` — piece-09d-2a-support-worker.zip
 - `data/Team.kt` — piece-08t3a-mined-days.zip
 - `data/TeamBoard.kt` — piece-08t4-leaderboard.zip
 - `ui/TeamBoardScreens.kt` — piece-09d-1-weekly-summaries.zip
@@ -627,7 +636,7 @@ Decisions:
 - `ui/WorkerHistory.kt` — piece-04c3-worker-history.zip
 - `ui/WorkerNcClaim.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerPayout.kt` — piece-04c4-worker-payout.zip
-- `ui/WorkerScreens.kt` — piece-09b-3-announcements.zip
+- `ui/WorkerScreens.kt` — piece-09d-2a-support-worker.zip
 - `ui/WorkerSubmit.kt` — piece-08b-z-fix-pickedfile.zip
 - `ui/WorkerTasks.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerTeam.kt` — piece-08t3c-gifts.zip
