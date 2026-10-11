@@ -87,8 +87,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | R4c | Points spending, manager screen: "Requests" tab in Referrals (real balance, approve with UGX / gift text, reject with reason, mark paid / given) + count on the tab and the menu | DONE in piece-13r4c-points-manager.zip (no DB change, app 63 / 0.62.0; needs R4b; build result: check Actions) |
 | R4d | Points spending, money link: the MAIN manager chooses the method in force (pay by hand / extra-payout gift / added to the weekly payout); written on each cash-out when approved | DONE in piece-13r4d-points-money.zip (DB v16, app 64 / 0.63.0; build result: check Actions) |
 | R5a-1 | Status perks, data: `tasks.minTier` (DB v17), TaskRepository create / update / snapshot carry it, `TaskGate` (names, who passes, reason text, manager-side and worker-side check). No screens, no message | DONE in piece-13r5a1-task-status-data.zip (DB v17, app 65 / 0.64.0; needs R4d; build result: check Actions) |
-| R5a-2 | Status perks, messages + enforcement: the TASK message carries `mt` (optional), the worker phone stores it, the manager phone REFUSES an imported submission whose worker has too low a status | NEXT |
-| R5b | Status perks, manager screen: "Who can do this task" chips (Everyone / Builder / Leader / Champion) in the task editor, a lock label in the task lists | todo |
+| R5a-2 | Status perks, messages + enforcement: the TASK message carries `mt` (optional), the worker phone stores it, the manager phone REFUSES an imported submission whose worker has too low a status | DONE in piece-13r5a2-task-status-message.zip (no DB change, app 66 / 0.65.0; needs R5a-1; build result: check Actions) |
+| R5b | Status perks, manager screen: "Who can do this task" chips (Everyone / Builder / Leader / Champion) in the task editor, a lock label in the task lists | NEXT |
 | R5c | Status perks, worker screen: locked tasks stay visible with the reason, open and Submit are blocked | todo |
 
 ## What each piece contains
@@ -806,7 +806,7 @@ Zip: `piece-13r4c-points-manager.zip` (sorts after `piece-13r4b-points-worker.zi
 - Tab: explanation (approve takes the points and writes down the UGX or gift; it does not send money; the worker sees it with the next update; rate shown), then up to 30 requests, WAITING first. Each: worker name, Cash-out / Gift, points, time, the worker's words, the worker's REAL balance now (red when not enough), for a cash-out "If approved: UGX points x rate", for a gift a field "What the gift is", a note field (needed to reject; shown to the worker), APPROVE (two taps: "TAP AGAIN: TAKE N POINTS AND APPROVE"), REJECT. Approved: the amount or gift, the note, "Not paid yet" + MARK PAID / MARK GIVEN (two taps) or "Paid / Given <time>". Rejected: the reason. Every manager (not only the main one) can decide; the audit log names who.
 - Do not re-declare: `RfRequestsTab`. Not compile-tested. If Actions fails, paste the error log.
 
-Next: R5a-2 (the TASK message carries the status, the manager refuses a submission below it). R5 is split into R5a-1, R5a-2, R5b, R5c.
+Next: R5b (the manager task editor and the lock label), then R5c (the worker sees locked tasks). R5a-1 and R5a-2 are done.
 
 ## Piece R5 — status perks, split into R5a-1, R5a-2, R5b, R5c (owner asked for smaller parts)
 Idea: a task can ask for a lowest referral status (R1 ladder: Member 0, Connector 1, Builder 2, Leader 3, Champion 4; awarded-referral thresholds default 1 / 3 / 7 / 15, editable by the main manager). The owner's list for tasks is Builder, Leader, Champion; the data accepts any real level.
@@ -820,6 +820,16 @@ Zip: `piece-13r5a1-task-status-data.zip` (DB v17 with `MIGRATION_16_17` = `ALTER
 - Do not re-declare: `TaskGate`, `TaskGateResult`.
 - For R5a-2: `applyTask` in `data/Sync.kt` builds `TaskEntity(...)` with named arguments, so add `minTier = ...` there (clamp with `TaskGate.valid`, default 0 when the field is missing so an old manager message means everyone); the TASK item body is made in `collectUpdateItems` (add optional field `mt`); the refusal belongs in `ReportImporter.importSubs` (`data/SyncReports.kt`, next to the daily-limit check; skip the submission with a note like the others, using `TaskGate.checkOnManager`). A changed `minTier` bumps the task `version`, so the normal TASK flow resends it. Workers on an OLD app ignore the unknown field.
 - Not compile-tested (no Kotlin/Gradle in the sandbox). Brace balance, the migration SQL and the gate logic were checked; new public names were checked against the whole project. If Actions fails, paste the error log.
+
+### R5a-2 — the TASK message and the manager's refusal (what exists now)
+Zip: `piece-13r5a2-task-status-message.zip` (sorts after `piece-13r5a1-task-status-data.zip`; no database change; app 66 / 0.65.0; needs R5a-1). Files: `data/Sync.kt` (three assert-once edits + one helper), `app/build.gradle.kts`.
+- TASK item body: optional field `mt` (the task's `minTier`) is added ONLY when it is above 0, so every task without a rule makes the same message as before. A changed rule bumps the task `version` (R5a-1), so the normal "send updates" flow resends it, by Telegram or copy, with no extra step. Workers on an OLD app ignore the unknown field (they just do not lock).
+- Worker phone (`applyTask`): `minTier = mt` clamped to 0..4, missing = 0 (everyone). It is kept on the worker's `tasks` row, ready for R5c to lock the task on screen. `TaskGate.checkOnWorker(ReferralViewCodec.load(...), task.minTier)` gives the words.
+- Manager phone (`applySubmission`, the report import, placed right after the time notes and BEFORE the one-per-day / one-time check): `minTierFor(task, tv)` takes the rule of the task VERSION the worker did the task under (`tv` in the submission; the snapshot's `minTier`, older snapshots have none = open; unknown version = the task's current rule). A task that was open when the worker did it stays accepted even if the manager raised the rule afterwards. If a rule applies, `TaskGate.checkOnManager` uses the REAL awarded count and the manager's thresholds; not enough -> result "Not used: status too low" (`consume = true`, so the message number is used up and the same submission is not asked for again; the text names the worker, the task and the needed status and points to Manager > Referrals), nothing is added to Review, audit `SUBMISSION_REFUSED_STATUS` (worker, task, status needed). The refusal shows in the Sync result, the Telegram "Recent activity" log and the report summary like the other "Not used" results.
+- Checked in a Python port: Builder needed and 2 awarded refuses, 3 awarded accepts; done under an open version 1 with 0 awarded is accepted; an unknown version uses the current rule; out-of-range `mt` is clamped.
+- Why the refusal is final: status never goes down, so a worker who reaches the status later simply does the task again; a submission made while locked (only possible with a modified app, or before the worker's phone had the rule) is not kept.
+- Not compile-tested (no Kotlin/Gradle in the sandbox). Brace balance was checked and the edits assert that the old text exists once. If Actions fails, paste the error log.
+- Next: R5b (task editor + lock label). Read the real latest `ui/ManagerScreens.kt` (`TaskEdit` route) and the task list card; use `TaskGate.label` and `repos.tasks.create/update(minTier)`.
 
 ## Piece R4d — how a points cash-out is paid (what exists now)
 Zip: `piece-13r4d-points-money.zip` (sorts after `piece-13r4c-points-manager.zip`; DB v16 with `MIGRATION_15_16` = two NULLABLE columns on `points_requests`; app 64 / 0.63.0). Files: `data/PointsRequests.kt`, `data/CTDatabase.kt`, `data/Repositories.kt` (one hook in `PayoutRepository.confirmPaid`), `data/Sync.kt` (`applyPayout` edited with assert-once replacements), `ui/ReferralRequests.kt`, `ui/ReferralScreens.kt` (passes `isMain`), `ui/WorkerPointsUse.kt`, `app/build.gradle.kts`.
@@ -869,7 +879,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
 - `data/TaskGate.kt` — piece-13r5a1-task-status-data.zip
-- `app/build.gradle.kts` — piece-13r5a1-task-status-data.zip
+- `app/build.gradle.kts` — piece-13r5a2-task-status-message.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -900,7 +910,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `data/ScreenshotChecks.kt` — piece-06-screenshot-verification.zip
 - `data/Security.kt` — piece-04c2-worker-proof.zip
 - `data/ServiceLocator.kt` — piece-13r4a-points-data.zip
-- `data/Sync.kt` — piece-13r4d-points-money.zip
+- `data/Sync.kt` — piece-13r5a2-task-status-message.zip
 - `data/ReferralView.kt` — piece-13r3a-referral-view-data.zip
 - `data/Telegram.kt` — piece-11d-backup-send.zip
 - `data/Notify.kt` — piece-11e-2-move-phone.zip
