@@ -81,8 +81,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | R1b | Referral rules editable by the MAIN manager only (points, reduction per referral, minimum, team or own count, approved work needed, UGX per point, status steps) + live preview | DONE in piece-13r1b-referral-rules.zip (no DB change, app 57 / 0.56.0; needs R1; build result: check Actions) |
 | R2 | Worker types a referral code when connecting (ENROLL gets field `rc`), manager sees it when approving the enrollment and the referral is recorded | DONE in piece-13r2-referral-code.zip (no DB change, app 58 / 0.57.0; needs R1; build result: check Actions) |
 | R3a | REFERRAL_VIEW update to the worker, data only (manager builds it, worker phone checks and keeps it; no screens) | DONE in piece-13r3a-referral-view-data.zip (no DB change, app 59 / 0.58.0; needs R2; build result: check Actions) |
-| R3b | Worker "Referrals & status" page in the three-bar menu: my code (COPY + SHARE text), status ladder with progress to the next status, points balance, my referrals and their progress (reads `ReferralViewCodec.load`) | NEXT |
-| R4 | Points spending: worker asks to use points (cash-out at the manager's UGX per point, or a gift), manager approves; ledger REDEEM entry; link to T3c gifts / payout | todo |
+| R3b | Worker "Referrals & status" page in the three-bar menu: my code (COPY + SHARE text), status with progress to the next status, points balance, my referrals and their progress | DONE in piece-13r3b-referral-page.zip (no DB change, app 60 / 0.59.0; needs R3a; build result: check Actions) |
+| R4 | Points spending: worker asks to use points (cash-out at the manager's UGX per point, or a gift), manager approves; ledger REDEEM entry; link to T3c gifts / payout | NEXT |
 | R5 | Status perks: a task can ask for a minimum status (Builder, Leader, Champion); TASK message carries it; worker sees locked tasks with the reason | todo |
 
 ## What each piece contains
@@ -773,6 +773,15 @@ Zip: `piece-13r3a-referral-view-data.zip` (sorts after `piece-13r2-referral-code
 
 Next: R3b (the worker page). Read `ui/WorkerScreens.kt` (three-bar menu of the worker home, `WRoute`) and `ui/WorkerTasks.kt` (`WRoute`); use `ReferralViewCodec.load`.
 
+## Piece R3b — worker referral page (what exists now)
+Zip: `piece-13r3b-referral-page.zip` (sorts after `piece-13r3a-referral-view-data.zip`; no database change; app 60 / 0.59.0; needs R3a). Files: `ui/WorkerReferral.kt` (new), `ui/WorkerScreens.kt` (replaced, 3 small edits), `app/build.gradle.kts`.
+- Worker three-bar menu, group "Team and learning": new item "Referrals & status" (`section = "referral"`) opening `WorkerMenuPage("Referrals & status") { WorkerReferralCard(repos, workerId) }`. The home hint line now mentions referrals.
+- `WorkerReferralCard` reads `ReferralViewCodec.load` and looks again every 4 s (so figures that were just imported appear by themselves). Without figures it says they arrive with the manager's next update (Sync). With figures: status name (Member / Connector / Builder / Leader / Champion) with its perk, a gold bar and "N more awarded referrals to become X (a of b)" (or "top status"); points balance with an honest estimate in UGX at the manager's rate ("an estimate, not a promise", "the manager decides if and when points can be used"); the code in big letters with COPY CODE and SHARE (Android share sheet, text: "Join me on CT Team! When you connect in the app, type my referral code CT-XXXXX. My referral only counts after you have N approved tasks."); a short "How it works" (one level only, counts after N approved tasks and the manager awards it, the manager checks every referral); the worker's own referrals (name, Waiting / Awarded / Not counted, progress bar approved x of N and the points it is worth, recorded time); "Updated by the manager on ...".
+- Do not re-declare: `WorkerReferralCard`.
+- Not compile-tested (no Kotlin/Gradle in the sandbox). Brace balance and new names were checked against the whole project. If Actions fails, paste the error log.
+
+Next: R4 (points spending): see the R4 row. Needs a DB change (new table for requests), a new worker -> manager report item and a manager -> worker decision message; split it (data + messages first, worker screen, manager screen, wiring) with the "SPLIT AGAIN" rules.
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
@@ -808,7 +817,7 @@ Files (zip: `piece-11d-backup-send.zip`; sorts after `piece-11c-restore.zip`): `
 Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-13r3a-referral-view-data.zip
+- `app/build.gradle.kts` — piece-13r3b-referral-page.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -882,7 +891,8 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/WorkerHistory.kt` — piece-04c3-worker-history.zip
 - `ui/WorkerNcClaim.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerPayout.kt` — piece-04c4-worker-payout.zip
-- `ui/WorkerScreens.kt` — piece-12b-3b-count-up-shimmer.zip
+- `ui/WorkerScreens.kt` — piece-13r3b-referral-page.zip
+- `ui/WorkerReferral.kt` — piece-13r3b-referral-page.zip
 - `ui/WorkerSubmit.kt` — piece-08b-z-fix-pickedfile.zip
 - `ui/WorkerTasks.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerTeam.kt` — piece-08t3c-gifts.zip
