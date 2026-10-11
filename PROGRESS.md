@@ -83,8 +83,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | R3a | REFERRAL_VIEW update to the worker, data only (manager builds it, worker phone checks and keeps it; no screens) | DONE in piece-13r3a-referral-view-data.zip (no DB change, app 59 / 0.58.0; needs R2; build result: check Actions) |
 | R3b | Worker "Referrals & status" page in the three-bar menu: my code (COPY + SHARE text), status with progress to the next status, points balance, my referrals and their progress | DONE in piece-13r3b-referral-page.zip (no DB change, app 60 / 0.59.0; needs R3a; build result: check Actions) |
 | R4a | Points spending, data + messages (no screens): table `points_requests` (DB v15), worker request rules, manager decide / mark paid, W2M `POINTS_REQ`, M2W `POINTS_DECISION` | DONE in piece-13r4a-points-data.zip (DB v15, app 61 / 0.60.0; needs R3b; build result: check Actions) |
-| R4b | Points spending, worker screen: ask to use points (cash-out or gift) inside "Referrals & status", list of my requests with status | NEXT |
-| R4c | Points spending, manager screen: "Requests" tab in Referrals (real balance, approve with UGX / gift text, reject with reason, mark paid) + count badge | todo |
+| R4b | Points spending, worker screen: "Use my points" card (cash-out or gift, points, note, SEND REQUEST) and "My requests" with status, inside "Referrals & status" | DONE in piece-13r4b-points-worker.zip (no DB change, app 62 / 0.61.0; needs R4a; build result: check Actions) |
+| R4c | Points spending, manager screen: "Requests" tab in Referrals (real balance, approve with UGX / gift text, reject with reason, mark paid) + count badge | NEXT |
 | R4d | Points spending, money link: how an approved cash-out reaches the worker's payout (T3c extra payout or a note on the payout request), decided with the owner | todo |
 | R5 | Status perks: a task can ask for a minimum status (Builder, Leader, Champion); TASK message carries it; worker sees locked tasks with the reason | todo |
 
@@ -792,7 +792,13 @@ Zip: `piece-13r4a-points-data.zip` (sorts after `piece-13r3b-referral-page.zip`;
 - Honest limits: workers on an OLD app refuse the new update type (update their app first); the worker phone checks the balance from the manager's last update, the manager checks the real one; points are never promised (R4b must say so); an approved cash-out only RECORDS the UGX amount, R4d decides how it is paid; a backup made before this build restores fine (Room migrates v14 -> v15). Do not re-declare: `PointsReqStatus`, `PointsReqKind`, `PointsRequestEntity`, `PointsRequestDao`, `PointsRequestRepository`, `PointsRequestCodec`, `PointsDecisionResult`.
 - Not compile-tested (no Kotlin/Gradle in the sandbox). Brace balance and new names were checked against the whole project. If Actions fails, paste the error log.
 
-Next: R4b (worker screen). Read `ui/WorkerReferral.kt` (`WorkerReferralCard`); add a "Use my points" card under the balance (kind chips Cash-out / Gift, points field, note, REQUEST) and "My requests" (observeOf), with the estimate sentence "the manager decides if and when points can be used; the rate may change".
+## Piece R4b — worker "Use my points" (what exists now)
+Zip: `piece-13r4b-points-worker.zip` (sorts after `piece-13r4a-points-data.zip`; no database change; app 62 / 0.61.0; needs R4a). Files: `ui/WorkerPointsUse.kt` (new: `WorkerPointsUseCard(repos, workerId)`), `ui/WorkerScreens.kt` (one edit: the "Referrals & status" menu page shows it under `WorkerReferralCard`), `app/build.gradle.kts`.
+- Card (only when the manager's figures have arrived; the referral card above explains otherwise): honest text (manager decides if and when; the rate can change; amounts are estimates), chips Cash-out / Gift, points field (digits, shows the balance), live estimate "About UGX ... at today's rate" for cash-out, note (for a gift: "What gift would you like?"), SEND REQUEST -> `PointsRequestRepository.request`. With an open request the form is replaced by "You already have a request waiting". After saving: "It reaches the manager with your next report: open Sync and send it."
+- "My requests" (newest 10, cancelled ones hidden): OPEN and not yet in a report = "Not sent yet" + TAKE IT BACK (`cancel`); OPEN and sent = "Waiting for the manager's answer"; APPROVED = the UGX amount or the gift text, then "Waiting for the manager to pay it / give it" or "Paid / Given <time>", and the manager's note; REJECTED = the reason and "Your points were not used". It looks again every 4 s (figures, outbox keys `PTR:<uid>`).
+- Do not re-declare: `WorkerPointsUseCard`. Not compile-tested. If Actions fails, paste the error log.
+
+Next: R4c (manager screen). Read `ui/ReferralScreens.kt` (tabs Referrals / Points / Codes / Rules) and add a "Requests" tab: list `repos.pointsRequests.observeAll()` newest first with worker name, kind, points, the worker's REAL balance, note; APPROVE (cash-out shows UGX = points x rate and needs a tap to confirm; gift needs the gift text), REJECT (reason), MARK PAID / GIVEN; badge with `observeOpenCount()` on the tab and on the Referrals menu item. Main manager and other managers may both decide (audit shows who).
 
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
@@ -829,7 +835,7 @@ Files (zip: `piece-11d-backup-send.zip`; sorts after `piece-11c-restore.zip`): `
 Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-13r4a-points-data.zip
+- `app/build.gradle.kts` — piece-13r4b-points-worker.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -904,8 +910,9 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/WorkerHistory.kt` — piece-04c3-worker-history.zip
 - `ui/WorkerNcClaim.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerPayout.kt` — piece-04c4-worker-payout.zip
-- `ui/WorkerScreens.kt` — piece-13r3b-referral-page.zip
+- `ui/WorkerScreens.kt` — piece-13r4b-points-worker.zip
 - `ui/WorkerReferral.kt` — piece-13r3b-referral-page.zip
+- `ui/WorkerPointsUse.kt` — piece-13r4b-points-worker.zip
 - `ui/WorkerSubmit.kt` — piece-08b-z-fix-pickedfile.zip
 - `ui/WorkerTasks.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerTeam.kt` — piece-08t3c-gifts.zip
