@@ -85,8 +85,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | R4a | Points spending, data + messages (no screens): table `points_requests` (DB v15), worker request rules, manager decide / mark paid, W2M `POINTS_REQ`, M2W `POINTS_DECISION` | DONE in piece-13r4a-points-data.zip (DB v15, app 61 / 0.60.0; needs R3b; build result: check Actions) |
 | R4b | Points spending, worker screen: "Use my points" card (cash-out or gift, points, note, SEND REQUEST) and "My requests" with status, inside "Referrals & status" | DONE in piece-13r4b-points-worker.zip (no DB change, app 62 / 0.61.0; needs R4a; build result: check Actions) |
 | R4c | Points spending, manager screen: "Requests" tab in Referrals (real balance, approve with UGX / gift text, reject with reason, mark paid / given) + count on the tab and the menu | DONE in piece-13r4c-points-manager.zip (no DB change, app 63 / 0.62.0; needs R4b; build result: check Actions) |
-| R4d | Points spending, money link: how an approved cash-out reaches the worker's payout (T3c extra payout or a note on the payout request), decided with the owner | NEXT |
-| R5 | Status perks: a task can ask for a minimum status (Builder, Leader, Champion); TASK message carries it; worker sees locked tasks with the reason | todo |
+| R4d | Points spending, money link: the MAIN manager chooses the method in force (pay by hand / extra-payout gift / added to the weekly payout); written on each cash-out when approved | DONE in piece-13r4d-points-money.zip (DB v16, app 64 / 0.63.0; build result: check Actions) |
+| R5 | Status perks: a task can ask for a minimum status (Builder, Leader, Champion); TASK message carries it; worker sees locked tasks with the reason | NEXT |
 
 ## What each piece contains
 1. **Foundation** — compiling project, fixed signing key, launcher icon from the approved logo, jewel theme, animated logo opening with gold light-sweep, Manager/Worker choice screen, different transition per button.
@@ -191,7 +191,7 @@ Notes for the next AI:
 Files (zip: `piece-04a-managers-worker.zip`):
 - `data/ManagerAccounts.kt` — table `manager_accounts` (up to 20): code name (stored UPPERCASE, unique), personal PIN (PBKDF2, 40 000 iterations, per-row salt), `isMain`, `suspendedUntil` (null / time / `Long.MAX_VALUE` = until re-enabled), `accessExpiresAt` (null / time). `ManagerAccountRepository`: `ensureMain`, `login(pin)` (PIN-only; PINs are unique), `blockReason`, `statusText`, `add`, `disable(durationMs|null)`, `allowFor(durationMs)`, `enableNow`, `setPin`, `rename`, `remove`. Only the main manager may call the change methods. Every action goes to the audit log with actor `manager:CODENAME`.
 - MAIN manager is seeded on first use with code name `MAIN` and PIN 114477, stored only as a salted hash (the PIN is not in the source as text). Main can change its own PIN and name in Manager > Managers > MAIN. The main manager can never be disabled or removed.
-- `data/CTDatabase.kt` — piece-09a-telegram-reader.zip
+- `data/CTDatabase.kt` — piece-13r4d-points-money.zip
 - `data/ServiceLocator.kt` — piece-09c-1-original-pictures.zip
 - `ui/ManagerAccess.kt` — `ManagerSession.actor`, `ManagerAccessGate` (PIN sign-in, 5 wrong = 30 s lock, shows the reason if blocked), `ManagersScreen` (main only: list with status, add, detail with Disable for period / Disable until re-enabled / Allow only for period / Enable now / rename / reset PIN / remove). Periods: hours, days, weeks, months (30 d), years (365 d), 1–1000.
 - `ui/ManagerScreens.kt` (replaced) — old PinGate removed; `ManagerArea` signs in with the new gate; a watchdog re-checks the signed-in manager every 5 s and signs them out when disabled; dashboard shows "Signed in as CODE" and a Managers card for the main manager; `ACTOR` now equals `ManagerSession.actor`.
@@ -803,7 +803,19 @@ Zip: `piece-13r4c-points-manager.zip` (sorts after `piece-13r4b-points-worker.zi
 - Tab: explanation (approve takes the points and writes down the UGX or gift; it does not send money; the worker sees it with the next update; rate shown), then up to 30 requests, WAITING first. Each: worker name, Cash-out / Gift, points, time, the worker's words, the worker's REAL balance now (red when not enough), for a cash-out "If approved: UGX points x rate", for a gift a field "What the gift is", a note field (needed to reject; shown to the worker), APPROVE (two taps: "TAP AGAIN: TAKE N POINTS AND APPROVE"), REJECT. Approved: the amount or gift, the note, "Not paid yet" + MARK PAID / MARK GIVEN (two taps) or "Paid / Given <time>". Rejected: the reason. Every manager (not only the main one) can decide; the audit log names who.
 - Do not re-declare: `RfRequestsTab`. Not compile-tested. If Actions fails, paste the error log.
 
-Next: R4d (money link). Ask the owner ONE question first: when a cash-out is approved, should it (1) stay a separate thing the manager pays by hand (today's behaviour), (2) be added as a T3c "extra payout" gift so it shows in the worker's team figures, or (3) be added to the worker's next weekly payout request? Then build only that.
+Next: R5 (status perks). Ask the owner before building if the three status names or their limits are unclear.
+
+## Piece R4d — how a points cash-out is paid (what exists now)
+Zip: `piece-13r4d-points-money.zip` (sorts after `piece-13r4c-points-manager.zip`; DB v16 with `MIGRATION_15_16` = two NULLABLE columns on `points_requests`; app 64 / 0.63.0). Files: `data/PointsRequests.kt`, `data/CTDatabase.kt`, `data/Repositories.kt` (one hook in `PayoutRepository.confirmPaid`), `data/Sync.kt` (`applyPayout` edited with assert-once replacements), `ui/ReferralRequests.kt`, `ui/ReferralScreens.kt` (passes `isMain`), `ui/WorkerPointsUse.kt`, `app/build.gradle.kts`.
+Owner decision (2026-10-11): "the main manager can decide on the current week's method". Built as a setting the MAIN manager can change at any time; the method in force at the moment of APPROVAL is written on the request, so changing it never changes requests already approved.
+- Setting: `meta` `points:cashoutMethod` = `HAND` (default) / `GIFT` / `WEEKLY` (`PointsPayMethod`), `PointsRequestRepository.payMethod()` / `setPayMethod(method, byMain, actor)` (non-main is refused; audit `POINTS_CASHOUT_METHOD_CHANGED`). Screen: Manager > Referrals > Requests, new card "How cash-outs are paid" (three chips; the chips do nothing for a non-main manager except say so).
+- New columns on `PointsRequestEntity`: `payMethod` (null for gifts and old requests) and `payRef` (GIFT = id of the team gift, WEEKLY = id of the payout request it was added to; on a worker phone "attached"). Only CASH-OUT requests use a method.
+- HAND: as before; the manager pays outside the app and taps MARK PAID.
+- GIFT: `decide(approve)` first calls `TeamGiftRepository.giveFixed(worker, UGX, "Points cash-out <last 8 of the request id>")` (a T3c extra-payout gift, shown in the worker's team figures); if that fails (for example the worker is disabled) the approval is refused and nothing is written. The manager still pays by hand and taps MARK PAID (the gift is only a record).
+- WEEKLY: nothing is paid at approval. When the manager imports the worker's PAYOUT_REQ (`applyPayout`), the UGX of all that worker's approved WEEKLY cash-outs that are unpaid and not yet attached is ADDED to the payout amount (`amount = tasks + points`), the requests get `payRef = payout id` and a new `ver`, and a warning line explains the total. The existing rule stays: the manager phone's own sum is the amount, the worker's figure is only a claim; the worker's phone shows the manager's higher amount when PAYOUT_PAID arrives. When the manager confirms that payout (`confirmPaid`), the attached cash-outs get `paidAt` and a new `ver` (audit POINTS_REQUEST_PAID), so the worker's points request turns to Paid with the next update. MARK PAID by hand is refused for an attached request; for a not-yet-attached WEEKLY request it is allowed (button "MARK PAID (paid outside the app)").
+- Worker phone: POINTS_DECISION body got optional `pm` (method) and `pa` (1 = attached to a payout); old phones ignore them. "My requests" shows, while unpaid: GIFT "It also shows as an extra payout in your team figures", WEEKLY "It will be added to your next weekly payout request" / "It is included in your weekly payout".
+- Limits: WEEKLY only rides on a weekly payout that has approved tasks in it (a worker with only points and no approved tasks cannot trigger it; use HAND for that); the amount the worker sees on a not-yet-paid payout request does not include the points; a backup made before this build restores fine (Room migrates v15 -> v16). Do not re-declare: `PointsPayMethod`.
+- Not compile-tested (no Kotlin/Gradle in the sandbox). Brace balance and new names were checked against the whole project. If Actions fails, paste the error log.
 
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
@@ -840,7 +852,7 @@ Files (zip: `piece-11d-backup-send.zip`; sorts after `piece-11c-restore.zip`): `
 Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-13r4c-points-manager.zip
+- `app/build.gradle.kts` — piece-13r4d-points-money.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -855,9 +867,9 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `data/Daos.kt` — piece-10a-learn-manager.zip
 - `data/Learn.kt` — piece-10a-learn-manager.zip
 - `data/Referral.kt` — piece-13r1b-referral-rules.zip
-- `data/PointsRequests.kt` — piece-13r4a-points-data.zip
-- `ui/ReferralScreens.kt` — piece-13r4c-points-manager.zip
-- `ui/ReferralRequests.kt` — piece-13r4c-points-manager.zip
+- `data/PointsRequests.kt` — piece-13r4d-points-money.zip
+- `ui/ReferralScreens.kt` — piece-13r4d-points-money.zip
+- `ui/ReferralRequests.kt` — piece-13r4d-points-money.zip
 - `data/Entities.kt` — piece-08c-nc-claims.zip
 - `data/ManagerAccounts.kt` — piece-11a-main-login.zip
 - `data/ManagerSync.kt` — piece-05e-manager-access.zip
@@ -867,11 +879,11 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `data/PayoutMatching.kt` — piece-07-payouts.zip
 - `data/PdfText.kt` — piece-08a-pdf-reader.zip
 - `data/ProofAnalyzer.kt` — piece-06-screenshot-verification.zip
-- `data/Repositories.kt` — piece-02-data.zip
+- `data/Repositories.kt` — piece-13r4d-points-money.zip
 - `data/ScreenshotChecks.kt` — piece-06-screenshot-verification.zip
 - `data/Security.kt` — piece-04c2-worker-proof.zip
 - `data/ServiceLocator.kt` — piece-13r4a-points-data.zip
-- `data/Sync.kt` — piece-13r4a-points-data.zip
+- `data/Sync.kt` — piece-13r4d-points-money.zip
 - `data/ReferralView.kt` — piece-13r3a-referral-view-data.zip
 - `data/Telegram.kt` — piece-11d-backup-send.zip
 - `data/Notify.kt` — piece-11e-2-move-phone.zip
@@ -918,7 +930,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/WorkerPayout.kt` — piece-04c4-worker-payout.zip
 - `ui/WorkerScreens.kt` — piece-13r4b-points-worker.zip
 - `ui/WorkerReferral.kt` — piece-13r3b-referral-page.zip
-- `ui/WorkerPointsUse.kt` — piece-13r4b-points-worker.zip
+- `ui/WorkerPointsUse.kt` — piece-13r4d-points-money.zip
 - `ui/WorkerSubmit.kt` — piece-08b-z-fix-pickedfile.zip
 - `ui/WorkerTasks.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerTeam.kt` — piece-08t3c-gifts.zip
