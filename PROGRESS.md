@@ -90,6 +90,7 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | R5a-2 | Status perks, messages + enforcement: the TASK message carries `mt` (optional), the worker phone stores it, the manager phone REFUSES an imported submission whose worker has too low a status | DONE in piece-13r5a2-task-status-message.zip (no DB change, app 66 / 0.65.0; needs R5a-1; build result: check Actions) |
 | R5b | Status perks, manager screen: "Who can do this task" chips (Everyone / Builder / Leader / Champion) in the task editor, a lock label in the task list | DONE in piece-13r5b-task-status-manager.zip (no DB change, app 67 / 0.66.0; needs R5a-2; build result: check Actions) |
 | R5c | Status perks, worker screen: locked tasks stay visible with the reason, open and Submit are blocked | DONE in piece-13r5c-task-status-worker.zip (no DB change, app 68 / 0.67.0; needs R5a-2; build result: check Actions) |
+| U1 | App update: the manager announces a new version with a download link; worker banner with DOWNLOAD UPDATE and a daily reminder notification | DONE in piece-14u1-app-update.zip (no DB change, app 69 / 0.68.0; build result: check Actions) |
 
 ## What each piece contains
 1. **Foundation** — compiling project, fixed signing key, launcher icon from the approved logo, jewel theme, animated logo opening with gold light-sweep, Manager/Worker choice screen, different transition per button.
@@ -859,6 +860,15 @@ Zip: `piece-13r5c-task-status-worker.zip` (sorts after `piece-13r5b-task-status-
 - Demo data unchanged (new fields have defaults).
 - Gap: the manager phone is the final check (R5a-2 refuses at import); a worker with an out-of-date status can see a task as locked until the next REFERRAL_VIEW is imported.
 
+### U1 — app update link, notification and daily reminder (what exists now)
+Zip: `piece-14u1-app-update.zip` (sorts after `piece-13r5c-task-status-worker.zip`; app 69 / 0.68.0; no DB change). Files: `data/AppUpdate.kt` (NEW), `ui/UpdateScreens.kt` (NEW), `data/Sync.kt`, `data/Telegram.kt`, `ui/TelegramScreens.kt`, `ui/WorkerScreens.kt`, `MainActivity.kt`, `app/build.gradle.kts`.
+- No new message type: the update rides on the normal signed NOTICE with optional fields `uv` (version code), `un` (name), `ul` (https link). `makeNotice(..., uv, un, ul)` and `sendAnnouncement(text, actor, uv, un, ul)` take them (defaults = plain announcement).
+- Worker phone: `applyNotice` calls `AppUpdate.save` (meta `update:latest`, keeps only the highest version; link must be https, no spaces, max 300). `AppUpdate.pending` = announced code > installed code (`PackageInfoCompat`).
+- UI: Manager > Telegram has "Release a new version" (code, name, link, note; two taps to send). Worker home shows `WorkerUpdateBanner` with DOWNLOAD UPDATE (opens the link in the browser) until the installed version catches up.
+- Daily reminder: `UpdateReminderWorker` (every ~6 h, enqueued in `MainActivity`, KEEP policy) posts one notification per 20 h on channel `ct_worker` (id 9105) while the phone is older. It needs notifications allowed; the banner says so if not.
+- How the manager releases: upload the new .apk (GitHub Releases > a direct https link works and is free), install it on the manager phone, open Telegram, fill the card with the NEW version code (= `versionCode` in `app/build.gradle.kts`) and the link, ANNOUNCE.
+- Gaps: reaches workers who share the Telegram message into CT Team (same as other announcements); the app cannot install by itself (Android asks the person to allow installing from the browser); no signature check on the file beyond Android's own (same signing key keeps data).
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
@@ -895,7 +905,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
 - `data/TaskGate.kt` — piece-13r5a1-task-status-data.zip
-- `app/build.gradle.kts` — piece-13r5c-task-status-worker.zip
+- `app/build.gradle.kts` — piece-14u1-app-update.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -905,7 +915,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/WorkerLearn.kt` — piece-10c-learn-worker.zip
 - `app/src/main/res/xml/file_paths.xml` — piece-11d-backup-send.zip
 - `app/src/main/AndroidManifest.xml` — piece-11d-backup-send.zip
-- `MainActivity.kt` — piece-09b-2-worker-import.zip
+- `MainActivity.kt` — piece-14u1-app-update.zip
 - `data/CTDatabase.kt` — piece-13r5a1-task-status-data.zip
 - `data/Daos.kt` — piece-10a-learn-manager.zip
 - `data/Learn.kt` — piece-10a-learn-manager.zip
@@ -926,11 +936,12 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `data/ScreenshotChecks.kt` — piece-06-screenshot-verification.zip
 - `data/Security.kt` — piece-04c2-worker-proof.zip
 - `data/ServiceLocator.kt` — piece-13r4a-points-data.zip
-- `data/Sync.kt` — piece-13r5a2-task-status-message.zip
+- `data/Sync.kt` — piece-14u1-app-update.zip
 - `data/ReferralView.kt` — piece-13r3a-referral-view-data.zip
-- `data/Telegram.kt` — piece-11d-backup-send.zip
+- `data/Telegram.kt` — piece-14u1-app-update.zip
+- `data/AppUpdate.kt` — piece-14u1-app-update.zip
 - `data/Notify.kt` — piece-11e-2-move-phone.zip
-- `ui/TelegramScreens.kt` — piece-09c-1-original-pictures.zip
+- `ui/TelegramScreens.kt` — piece-14u1-app-update.zip
 - `ui/ShareInbox.kt` — piece-09b-2-worker-import.zip
 - `ui/WorkerIncoming.kt` — piece-09b-2-worker-import.zip
 - `ui/WorkerNotices.kt` — piece-09b-3-announcements.zip
@@ -971,7 +982,8 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/WorkerHistory.kt` — piece-04c3-worker-history.zip
 - `ui/WorkerNcClaim.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerPayout.kt` — piece-04c4-worker-payout.zip
-- `ui/WorkerScreens.kt` — piece-13r5c-task-status-worker.zip
+- `ui/UpdateScreens.kt` — piece-14u1-app-update.zip
+- `ui/WorkerScreens.kt` — piece-14u1-app-update.zip
 - `ui/WorkerReferral.kt` — piece-13r3b-referral-page.zip
 - `ui/WorkerPointsUse.kt` — piece-13r4d-points-money.zip
 - `ui/WorkerSubmit.kt` — piece-13r5c-task-status-worker.zip
