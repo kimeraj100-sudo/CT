@@ -82,7 +82,10 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | R2 | Worker types a referral code when connecting (ENROLL gets field `rc`), manager sees it when approving the enrollment and the referral is recorded | DONE in piece-13r2-referral-code.zip (no DB change, app 58 / 0.57.0; needs R1; build result: check Actions) |
 | R3a | REFERRAL_VIEW update to the worker, data only (manager builds it, worker phone checks and keeps it; no screens) | DONE in piece-13r3a-referral-view-data.zip (no DB change, app 59 / 0.58.0; needs R2; build result: check Actions) |
 | R3b | Worker "Referrals & status" page in the three-bar menu: my code (COPY + SHARE text), status with progress to the next status, points balance, my referrals and their progress | DONE in piece-13r3b-referral-page.zip (no DB change, app 60 / 0.59.0; needs R3a; build result: check Actions) |
-| R4 | Points spending: worker asks to use points (cash-out at the manager's UGX per point, or a gift), manager approves; ledger REDEEM entry; link to T3c gifts / payout | NEXT |
+| R4a | Points spending, data + messages (no screens): table `points_requests` (DB v15), worker request rules, manager decide / mark paid, W2M `POINTS_REQ`, M2W `POINTS_DECISION` | DONE in piece-13r4a-points-data.zip (DB v15, app 61 / 0.60.0; needs R3b; build result: check Actions) |
+| R4b | Points spending, worker screen: ask to use points (cash-out or gift) inside "Referrals & status", list of my requests with status | NEXT |
+| R4c | Points spending, manager screen: "Requests" tab in Referrals (real balance, approve with UGX / gift text, reject with reason, mark paid) + count badge | todo |
+| R4d | Points spending, money link: how an approved cash-out reaches the worker's payout (T3c extra payout or a note on the payout request), decided with the owner | todo |
 | R5 | Status perks: a task can ask for a minimum status (Builder, Leader, Champion); TASK message carries it; worker sees locked tasks with the reason | todo |
 
 ## What each piece contains
@@ -780,7 +783,16 @@ Zip: `piece-13r3b-referral-page.zip` (sorts after `piece-13r3a-referral-view-dat
 - Do not re-declare: `WorkerReferralCard`.
 - Not compile-tested (no Kotlin/Gradle in the sandbox). Brace balance and new names were checked against the whole project. If Actions fails, paste the error log.
 
-Next: R4 (points spending): see the R4 row. Needs a DB change (new table for requests), a new worker -> manager report item and a manager -> worker decision message; split it (data + messages first, worker screen, manager screen, wiring) with the "SPLIT AGAIN" rules.
+## Piece R4a — points spending, data and messages (what exists now)
+Zip: `piece-13r4a-points-data.zip` (sorts after `piece-13r3b-referral-page.zip`; DB v15 with `MIGRATION_14_15` = ONE new table, checked in sqlite against the entity; app 61 / 0.60.0). Files: `data/PointsRequests.kt` (new), `data/CTDatabase.kt`, `data/ServiceLocator.kt` (`repos.pointsRequests`), `data/Sync.kt` (patched with assert-once edits), `app/build.gradle.kts`. No screens (R4b, R4c).
+- Entity `PointsRequestEntity` (`points_requests`): `uid` ("PR-" + 32 hex, made on the worker phone), `workerId`, `points`, `kind` (`PointsReqKind.CASHOUT` / `GIFT`), `note`, `status` (`PointsReqStatus.OPEN` / `APPROVED` / `REJECTED` / `CANCELLED`), `createdAt`, `decidedAt`, `decisionNote`, `ugxAmount` (cash-out value fixed at approval), `ugxRate`, `giftText`, `paidAt`, `ver` (number of manager changes). `PointsRequestDao`: `get`, `of(worker)`, `observeOf`, `observeAll`, `observeOpenCount`, `openCountOf`, `openPointsOf`.
+- Worker phone, `PointsRequestRepository.request(workerId, points, kind, note)`: 1..100000 points; a gift needs 3+ characters of text; needs the manager's last REFERRAL_VIEW figures (refused with a clear message when none arrived) and points up to that balance; ONE open request at a time. `cancel(workerId, uid)` only while the request was never put in a report (outbox key `PTR:<uid>`).
+- Manager phone: `accept(...)` (idempotent by uid; used by the sync), `decide(uid, approve, giftText, note, actor)`: APPROVE needs the REAL ledger balance to cover the points, writes a negative `REDEEM` ledger entry (refKey = uid, so never twice), a cash-out gets UGX = points x the current UGX-per-point (refused when the rate is 0), a gift needs its text; REJECT needs a reason (5+ characters); a decided request cannot be decided again. `markPaid(uid, actor)` for an approved request (once). Each manager change raises `ver`. Audit: POINTS_REQUEST_MADE / CANCELLED / RECEIVED / APPROVED / REJECTED / PAID / POINTS_DECISION_RECEIVED.
+- Messages: W2M `SyncRepository.TYPE_POINTS_REQ = "POINTS_REQ"` (in `MANAGER_TYPES`; report item `PTR:<uid>`, body `id, pt, kd, nt, at`; counted by `unsentCount`), M2W `TYPE_POINTS_DECISION = "POINTS_DECISION"` (in `WORKER_TYPES`; update item `PTD:<uid>:<ver>`, body `id, st, ver, pt, kd, nt, at, ug, ur, gf, pd`; a decision is used only when its `ver` is higher). `PointsRequestCodec` holds the two bodies and the worker-side `apply`. After an approval the worker's next REFERRAL_VIEW shows the lower balance by itself (the balance is part of its fingerprint).
+- Honest limits: workers on an OLD app refuse the new update type (update their app first); the worker phone checks the balance from the manager's last update, the manager checks the real one; points are never promised (R4b must say so); an approved cash-out only RECORDS the UGX amount, R4d decides how it is paid; a backup made before this build restores fine (Room migrates v14 -> v15). Do not re-declare: `PointsReqStatus`, `PointsReqKind`, `PointsRequestEntity`, `PointsRequestDao`, `PointsRequestRepository`, `PointsRequestCodec`, `PointsDecisionResult`.
+- Not compile-tested (no Kotlin/Gradle in the sandbox). Brace balance and new names were checked against the whole project. If Actions fails, paste the error log.
+
+Next: R4b (worker screen). Read `ui/WorkerReferral.kt` (`WorkerReferralCard`); add a "Use my points" card under the balance (kind chips Cash-out / Gift, points field, note, REQUEST) and "My requests" (observeOf), with the estimate sentence "the manager decides if and when points can be used; the rate may change".
 
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
@@ -817,7 +829,7 @@ Files (zip: `piece-11d-backup-send.zip`; sorts after `piece-11c-restore.zip`): `
 Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-13r3b-referral-page.zip
+- `app/build.gradle.kts` — piece-13r4a-points-data.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -828,10 +840,11 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `app/src/main/res/xml/file_paths.xml` — piece-11d-backup-send.zip
 - `app/src/main/AndroidManifest.xml` — piece-11d-backup-send.zip
 - `MainActivity.kt` — piece-09b-2-worker-import.zip
-- `data/CTDatabase.kt` — piece-13r1-referral-data.zip
+- `data/CTDatabase.kt` — piece-13r4a-points-data.zip
 - `data/Daos.kt` — piece-10a-learn-manager.zip
 - `data/Learn.kt` — piece-10a-learn-manager.zip
 - `data/Referral.kt` — piece-13r1b-referral-rules.zip
+- `data/PointsRequests.kt` — piece-13r4a-points-data.zip
 - `ui/ReferralScreens.kt` — piece-13r1b-referral-rules.zip
 - `data/Entities.kt` — piece-08c-nc-claims.zip
 - `data/ManagerAccounts.kt` — piece-11a-main-login.zip
@@ -845,8 +858,8 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `data/Repositories.kt` — piece-02-data.zip
 - `data/ScreenshotChecks.kt` — piece-06-screenshot-verification.zip
 - `data/Security.kt` — piece-04c2-worker-proof.zip
-- `data/ServiceLocator.kt` — piece-13r1-referral-data.zip
-- `data/Sync.kt` — piece-13r3a-referral-view-data.zip
+- `data/ServiceLocator.kt` — piece-13r4a-points-data.zip
+- `data/Sync.kt` — piece-13r4a-points-data.zip
 - `data/ReferralView.kt` — piece-13r3a-referral-view-data.zip
 - `data/Telegram.kt` — piece-11d-backup-send.zip
 - `data/Notify.kt` — piece-11e-2-move-phone.zip
