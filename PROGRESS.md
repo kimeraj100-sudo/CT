@@ -79,8 +79,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 12c | Polish, finishing: friendly empty states + a drawn success checkmark after approve / reject, support reply, lesson save / send | DONE in piece-12c-empty-states-success.zip (no DB change, app 55 / 0.54.0; needs 12b-3b; build result: check Actions). Glass bottom bar: NOT built (only if the owner asks). Next: run the whole app on a phone and report problems; then fixes. |
 | R1 | Referral rewards, data + manager screen: referral codes, referral links, points ledger, status ladder, rules (DB v14) | DONE in piece-13r1-referral-data.zip (DB v14, app 56 / 0.55.0; needs 12c; build result: check Actions) |
 | R1b | Referral rules editable by the MAIN manager only (points, reduction per referral, minimum, team or own count, approved work needed, UGX per point, status steps) + live preview | DONE in piece-13r1b-referral-rules.zip (no DB change, app 57 / 0.56.0; needs R1; build result: check Actions) |
-| R2 | Worker types a referral code when connecting (ENROLL gets field `ref`), manager sees it when approving the enrollment and the referral is recorded | NEXT |
-| R3 | REFERRAL_VIEW update to the worker (code, points, status, referrals and their progress) + worker "Referrals & status" menu page with share text | todo |
+| R2 | Worker types a referral code when connecting (ENROLL gets field `rc`), manager sees it when approving the enrollment and the referral is recorded | DONE in piece-13r2-referral-code.zip (no DB change, app 58 / 0.57.0; needs R1; build result: check Actions) |
+| R3 | REFERRAL_VIEW update to the worker (code, points, status, referrals and their progress) + worker "Referrals & status" menu page with share text | NEXT |
 | R4 | Points spending: worker asks to use points (cash-out at the manager's UGX per point, or a gift), manager approves; ledger REDEEM entry; link to T3c gifts / payout | todo |
 | R5 | Status perks: a task can ask for a minimum status (Builder, Leader, Champion); TASK message carries it; worker sees locked tasks with the reason | todo |
 
@@ -751,6 +751,16 @@ Zip: `piece-13r1b-referral-rules.zip` (sorts after `piece-13r1-referral-data.zip
 - Screen: READY / WAITING lines show "worth N points"; the Rules tab has a live preview ("Referral number 1, 2, 5, 10, 20, 50, 100") and the status ladder with the typed thresholds.
 - API for later pieces: `repos.referral.settings()` (class `RefSettings`), `pointsForReferral`, `thresholds()`, `ReferralRules.tierOf(awarded, mins)`, `ReferralRules.thresholdFor(index, mins)`, `ReferralRules.nextTier(awarded, mins)`.
 
+
+## Piece R2 — referral code at connect
+
+Zip: `piece-13r2-referral-code.zip` (sorts after `piece-13r1b-referral-rules.zip`). Files: `data/Sync.kt`, `ui/SyncScreens.kt`, `app/build.gradle.kts` (58 / 0.57.0). No database change. Needs R1.
+- Worker phone (Connect card, after SHOW CONNECTION OPTIONS): optional field "Referral code". Saved in `meta` key `ref:in:<workerId>` so the connection code can be made again; `makeEnrollment` adds JSON field `rc` (normalised) when not blank.
+- Manager phone: `EnrollPreview.refCode` (new last field, default ""). The approval card shows "Referral code used".
+- `acceptEnrollment`: after the connection is saved, calls `ReferralRepository.link(workerId, rc, actor)`. A wrong, own, circular or second code never blocks the worker; it is written to the audit log as `REFERRAL_CODE_REFUSED`.
+- The manager can still add or fix a referral by hand in Referrals > Codes (R1).
+- Not changed: the "join code" made by the manager (no referral field), Telegram (still says open Sync to approve).
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
@@ -815,7 +825,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `data/ScreenshotChecks.kt` — piece-06-screenshot-verification.zip
 - `data/Security.kt` — piece-04c2-worker-proof.zip
 - `data/ServiceLocator.kt` — piece-13r1-referral-data.zip
-- `data/Sync.kt` — piece-11e-1-number-sync.zip
+- `data/Sync.kt` — piece-13r2-referral-code.zip
 - `data/Telegram.kt` — piece-11d-backup-send.zip
 - `data/Notify.kt` — piece-11e-2-move-phone.zip
 - `ui/TelegramScreens.kt` — piece-09c-1-original-pictures.zip
@@ -850,7 +860,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/PayoutScreens.kt` — piece-12c-empty-states-success.zip
 - `ui/Screens.kt` — piece-03-manager.zip
 - `ui/SecurityScreens.kt` — piece-04c1-worker-tasks.zip
-- `ui/SyncScreens.kt` — piece-11e-3-worker-new-manager.zip
+- `ui/SyncScreens.kt` — piece-13r2-referral-code.zip
 - `ui/TeamGiftScreens.kt` — piece-08t3c-gifts.zip
 - `ui/TeamGoalScreens.kt` — piece-08t3b-goal-rigs.zip
 - `ui/TeamScreens.kt` — piece-08t4-leaderboard.zip
