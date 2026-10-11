@@ -97,7 +97,12 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | C2a | Auto-connect, data + rules (no screen): `AutoConnect` (switch `ac:on`, list `ac:unv`), Telegram enrollment auto-approved for a NEW worker with no problem, chat bound, first update sent; payout confirmation and referral award refused while a worker is unverified | DONE in piece-15c3-auto-connect-data.zip (no DB change, app 73 / 0.72.0; needs C1b; build result: check Actions) |
 | C2b | Auto-connect screen: menu > Auto-connect (ON / OFF for the main manager, list "Not verified" with VERIFY for every manager) | DONE in piece-15c4-auto-connect-screen.zip (no DB change, app 74 / 0.73.0; needs C2a; build result: check Actions) |
 | C3 | Help text (in-app `HelpGuide.kt`) and the public guide updated to the one-tap connect, auto-connect and verify | DONE in piece-15c5-help-connect.zip (no DB change, app 75 / 0.74.0; needs C2b; build result: check Actions). The old Connect card under Sync is unchanged on purpose (it still works as a fallback) |
+| C1c | Owner could not see the one-tap card (it hides once the phone has accepted any manager message) and still saw the manual codes: the card now ALWAYS shows at the top of worker menu > Sync; the old code screen is behind "MANUAL CONNECTION WITH CODES (ADVANCED)" | DONE in piece-15c6-connect-always.zip (no DB change, app 76 / 0.75.0; needs C3; build result: check Actions) |
 | H2 | In-app help shown in Support: worker menu > Support has the card above the chat; manager Support list has it under the chats | DONE in piece-15h2-help-in-support.zip (no DB change, app 71 / 0.70.0; needs H1; build result: check Actions) |
+| 16a | REPAIR + required connect window: restores the worker-home connect card (lost: `15h2` sorts AFTER `15c1` and overwrote `WorkerScreens.kt`), restores the connect help text (lost: `15h1` overwrote `15c5`'s `HelpGuide.kt`), raises the version (the repo was at 71 while 76 had been built) and adds a window that REQUIRES the worker to connect through the bot until the manager's first message arrives | DONE in piece-16a-connect-popup.zip (no DB change, app 77 / 0.76.0; build result: check Actions) |
+| 16b | Auto-connect ON by default (an explicit OFF set by the main manager is kept), so a new worker is connected the moment their code reaches the bot | NEXT |
+| 16c | The manager phone keeps reading the Telegram bot while the APP is open on any screen (not only when the manager area is open and signed in) + a live line "Telegram: reading / problem" on the manager home | todo |
+| 16d | Worker first-message step: make the manager's reply easy to open (clipboard offer + share target checked), connection status line on the worker home | todo |
 
 ## What each piece contains
 1. **Foundation** — compiling project, fixed signing key, launcher icon from the approved logo, jewel theme, animated logo opening with gold light-sweep, Manager/Worker choice screen, different transition per button.
@@ -902,6 +907,16 @@ Zip: `piece-14u1-app-update.zip` (sorts after `piece-13r5c-task-status-worker.zi
 - How the manager releases: upload the new .apk (GitHub Releases > a direct https link works and is free), install it on the manager phone, open Telegram, fill the card with the NEW version code (= `versionCode` in `app/build.gradle.kts`) and the link, ANNOUNCE.
 - Gaps: reaches workers who share the Telegram message into CT Team (same as other announcements); the app cannot install by itself (Android asks the person to allow installing from the browser); no signature check on the file beyond Android's own (same signing key keeps data).
 
+## Piece 16a — repair and the required connect window (what exists now)
+Zip: `piece-16a-connect-popup.zip` (sorts after `piece-15h2-help-in-support.zip` in BOTH the C and the punctuation-ignoring order; no database change; app 77 / 0.76.0). Files: `ui/ConnectPopup.kt` (new: `ConnectRequiredPopup(repos, workerId)`), `ui/WorkerScreens.kt` (the merged latest file + two lines in `top`), `ui/HelpGuide.kt` (the version from `piece-15c5-help-connect.zip` + one sentence about the window), `app/build.gradle.kts`.
+- WHY THE OWNER SAW NO "SEND MY CONNECTION": the C pieces (`piece-15c1` .. `15c6`) were written AFTER `15h1` / `15h2` in time, but their names sort BEFORE `15h`, so the build applies `15h2` last. `15h2` held an older `WorkerScreens.kt` (no connect card), `15h1` an older `HelpGuide.kt`, and both a lower `app/build.gradle.kts` (71 while 76 existed). The tool that found it: for every file, take the LAST zip in sorted order and compare with the FILE OWNERS list; the five mismatches were `WorkerScreens.kt`, `HelpGuide.kt`, `app/build.gradle.kts` (all repaired here), and `ManagerAccounts.kt` / `ServiceLocator.kt` (only because those owner zips, `11a` and `13r4a`, were not in the set that was checked; the owners list is right).
+- RULE (new): a zip key must sort AFTER every zip that was written before it. Never reuse a smaller key for later work (`15h` after `15c`). Check with `sortcheck.py` AND with the "last zip per file equals the owners list" test.
+- The window: shows on the REAL worker home (not in demo) when the phone has accepted NO message from the manager yet (`managerMessagesReceived == 0`), looking again every 3 s. Step 1 OPEN THE BOT (meta `qc:opened:<worker>`; Telegram's START rule), step 2 SEND MY CONNECTION (referral code field; same `makeEnrollment` call as the card; sets `qc:sent:<worker>`; opens Telegram's send screen with the code), step 3 explains how to open the manager's reply (Share > CT Team, or copy and come back for USE IT). Before step 2 it CANNOT be closed (Back and tap-outside do nothing). After step 2 a button "I SENT IT, CLOSE FOR NOW" closes it until the app is opened again. It closes by itself when the first manager message is accepted. The `QuickConnectCard` is back at the top of the worker home too.
+- Honest limit (important): a worker's phone CANNOT read the Telegram bot by itself (the bot token is never put in the app, on purpose). So the manager's reply has to be opened by the worker with Share > CT Team or the clipboard offer. 16d makes that step easier; a real automatic channel would need a small server, which the owner has not asked for.
+- Do not re-declare: `ConnectRequiredPopup`. Not compile-tested. If Actions fails, paste the error log.
+
+Next: 16b (auto-connect ON by default), then 16c (the manager phone reads Telegram while the app is open). Why the manager saw nothing: `TelegramRepository.pollLoop` is started in ONE place, `ui/ManagerScreens.kt` line 169, inside the manager area after sign-in, so anything a worker sent waited in Telegram until a manager opened the manager area (Telegram keeps updates about 24 h). Also `AutoConnect.enabled` reads `meta ac:on == "1"`, so with the default (never set) every new worker waited for a hand approval.
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
@@ -938,7 +953,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
 - `data/TaskGate.kt` — piece-13r5a1-task-status-data.zip
-- `app/build.gradle.kts` — piece-15c5-help-connect.zip
+- `app/build.gradle.kts` — piece-16a-connect-popup.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -982,8 +997,9 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/Motion.kt` — piece-12b-3b-count-up-shimmer.zip
 - `ui/Polish.kt` — piece-12c-empty-states-success.zip
 - `ui/SupportManager.kt` — piece-15h2-help-in-support.zip
-- `ui/HelpGuide.kt` — piece-15c5-help-connect.zip
-- `ui/QuickConnect.kt` — piece-15c1-quick-connect.zip
+- `ui/HelpGuide.kt` — piece-16a-connect-popup.zip
+- `ui/QuickConnect.kt` — piece-15c6-connect-always.zip
+- `ui/ConnectPopup.kt` — piece-16a-connect-popup.zip
 - `data/AutoConnect.kt` — piece-15c3-auto-connect-data.zip
 - `ui/AutoConnectScreens.kt` — piece-15c4-auto-connect-screen.zip
 - `data/BotConfig.kt` — piece-15c2-bot-name.zip (superseded: `piece-15c2-bot-name.zip`)
@@ -1011,7 +1027,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/PayoutScreens.kt` — piece-12c-empty-states-success.zip
 - `ui/Screens.kt` — piece-03-manager.zip
 - `ui/SecurityScreens.kt` — piece-04c1-worker-tasks.zip
-- `ui/SyncScreens.kt` — piece-13r2-referral-code.zip
+- `ui/SyncScreens.kt` — piece-15c6-connect-always.zip
 - `ui/TeamGiftScreens.kt` — piece-08t3c-gifts.zip
 - `ui/TeamGoalScreens.kt` — piece-08t3b-goal-rigs.zip
 - `ui/TeamScreens.kt` — piece-08t4-leaderboard.zip
@@ -1021,7 +1037,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/WorkerNcClaim.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerPayout.kt` — piece-04c4-worker-payout.zip
 - `ui/UpdateScreens.kt` — piece-14u1-app-update.zip
-- `ui/WorkerScreens.kt` — piece-15c1-quick-connect.zip
+- `ui/WorkerScreens.kt` — piece-16a-connect-popup.zip
 - `ui/WorkerReferral.kt` — piece-13r3b-referral-page.zip
 - `ui/WorkerPointsUse.kt` — piece-13r4d-points-money.zip
 - `ui/WorkerSubmit.kt` — piece-13r5c-task-status-worker.zip
