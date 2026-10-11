@@ -77,6 +77,12 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 12b-3a | Polish: screens slide / cross-fade between each other (manager and worker), direction follows depth | DONE in piece-12b-3a-slide-between-screens.zip (no DB change, app 53 / 0.52.0; needs 12b-2; build result: check Actions) |
 | 12b-3b | Polish: count-up on the stat tiles (manager dashboard and worker home), pulsing placeholder while the dashboard loads | DONE in piece-12b-3b-count-up-shimmer.zip (no DB change, app 54 / 0.53.0; needs 12b-3a; build result: check Actions) |
 | 12c | Polish, finishing: friendly empty states + a drawn success checkmark after approve / reject, support reply, lesson save / send | DONE in piece-12c-empty-states-success.zip (no DB change, app 55 / 0.54.0; needs 12b-3b; build result: check Actions). Glass bottom bar: NOT built (only if the owner asks). Next: run the whole app on a phone and report problems; then fixes. |
+| R1 | Referral rewards, data + manager screen: referral codes, referral links, points ledger, status ladder, rules (DB v14) | DONE in piece-13r1-referral-data.zip (DB v14, app 56 / 0.55.0; needs 12c; build result: check Actions) |
+| R1b | Referral rules editable by the MAIN manager only (points, reduction per referral, minimum, team or own count, approved work needed, UGX per point, status steps) + live preview | DONE in piece-13r1b-referral-rules.zip (no DB change, app 57 / 0.56.0; needs R1; build result: check Actions) |
+| R2 | Worker types a referral code when connecting (ENROLL gets field `ref`), manager sees it when approving the enrollment and the referral is recorded | NEXT |
+| R3 | REFERRAL_VIEW update to the worker (code, points, status, referrals and their progress) + worker "Referrals & status" menu page with share text | todo |
+| R4 | Points spending: worker asks to use points (cash-out at the manager's UGX per point, or a gift), manager approves; ledger REDEEM entry; link to T3c gifts / payout | todo |
+| R5 | Status perks: a task can ask for a minimum status (Builder, Leader, Champion); TASK message carries it; worker sees locked tasks with the reason | todo |
 
 ## What each piece contains
 1. **Foundation** — compiling project, fixed signing key, launcher icon from the approved logo, jewel theme, animated logo opening with gold light-sweep, Manager/Worker choice screen, different transition per button.
@@ -201,7 +207,6 @@ Files (zip: `piece-04b-security.zip`, sorts AFTER `piece-04a-managers-worker.zip
 - `ui/ManagerAccess.kt` (replaced) — `ManagerAccessGate` now uses `CredentialGate`; Managers screen: ADD MANAGER = code name + PIN length (6/8/10) -> app makes the PIN, shows it ONCE with a "copy message to send" button; manager detail has RESET TO DEFAULT (tap twice, new PIN shown once).
 - `ui/ManagerScreens.kt` (replaced) — route `MySecurity`, dashboard card "My security", watchdog also signs a manager out when `credVersion` changed (reset or credentials changed elsewhere).
 - `ui/WorkerScreens.kt` (replaced) — `WorkerArea` phases: Register -> (Setup for pre-4B workers) -> Gate -> Home; registration now also asks username, password, PIN; home shows username and a change PIN/password card; the "coming next" card now says Piece 4C.
-- `app/build.gradle.kts` — piece-12a-touch-feel.zip
 
 Rules implemented:
 - FULL sign-in = name (manager code name / worker username) + password + PIN. Needed first time on a phone and again every 30 days on that phone. QUICK unlock = only PIN OR only password, for 30 days after the last FULL sign-in on that phone (`device_trust`). Trust is void when `credVersion` changes (reset, password change, PIN change) or the manager taps "Forget this phone".
@@ -723,6 +728,29 @@ Zip: `piece-12c-empty-states-success.zip` (sorts after `piece-12b-3b-count-up-sh
 - Errors keep their red text; only successes use `SuccessNote`.
 - Not built: the glass bottom bar (listed in the SPEC polish idea; the three-bar menu covers navigation).
 
+## Referral program plan (owner idea 2026-10-11) and Piece R1 (what exists now)
+Owner idea: workers who refer new workers get a higher STATUS and POINTS; points can become money or gifts when spent; status means easier access to opportunities.
+Design decisions (all rules are manager-editable; confirm with the owner before building R2+):
+- One code per worker (`CT-XXXXX`, no 0/O/1/I/L), made by the manager phone. A new worker types a code once; one referrer per worker; no own code, no circles (checked up the chain).
+- A referral counts only after the referred worker has real APPROVED work (default 3 approved submissions). The manager sees READY referrals and taps AWARD: a human check against fake accounts.
+- Points: default 100 per awarded referral, append-only ledger `points_ledger` (unique per referred worker, so no double award); manual BONUS / ADJUST need a reason and are audited.
+- Status ladder from AWARDED referrals: Member 0, Connector 1, Builder 3, Leader 7, Champion 15. Spending points never lowers status.
+- ONE LEVEL ONLY: points come only from workers you referred yourself, never from their referrals (keeps it away from pyramid / MLM schemes; the owner should still check Uganda rules before paying money for referrals).
+- Points to money: UGX per point typed by the manager (default 50), paid only when the manager approves a request (R4).
+R1 zip: `piece-13r1-referral-data.zip` (sorts after `piece-12c-empty-states-success.zip`). Files: `data/Referral.kt` (new: entities `ReferralCodeEntity`, `ReferralEntity`, `PointsEntryEntity`; `ReferralDao`; `ReferralRules` (tiers, code normalising, readiness); `ReferralRepository`: `codeFor`, `link`, `lines`, `award`, `reject`, `adjust`, `balance`, `awardedCount`, `statusOf`, settings `pointsPerAward` / `needApproved` / `ugxPerPoint` / `saveSettings`), `data/CTDatabase.kt` (version 14, `MIGRATION_13_14`, `referralDao()`), `data/ServiceLocator.kt` (`repos.referral`), `ui/ReferralScreens.kt` (new: `ManagerReferralScreen`, tabs Referrals / Points / Codes / Rules), `ui/ManagerScreens.kt` (route `MgrRoute.Referral`, menu item "Referrals" in the three-bar menu group Team and learning), `app/build.gradle.kts` (56 / 0.55.0).
+- Manager screen: Referrals tab (record a referral by picking the new worker and typing the code; READY / WAITING / AWARDED / REJECTED list; AWARD POINTS; REJECT with a reason), Points tab (status and balance per worker; add/remove points with a reason; latest entries), Codes tab (every worker's code with COPY), Rules tab (points per referral, approved submissions needed, UGX per point; status ladder).
+- Audit actions: REFERRAL_SETTINGS, REFERRAL_LINKED, REFERRAL_AWARDED, REFERRAL_REJECTED, POINTS_BONUS, POINTS_ADJUST.
+- Workers see nothing yet (R2 to R5). Backups include the new tables automatically (the whole database file).
+- Do not re-declare these public names later: `RefStatus`, `PointsKind`, `ReferralRules`, `ReferralLine`, `PointsBalance`, `ReferralCodeEntity`, `ReferralEntity`, `PointsEntryEntity`, `ReferralDao`, `ReferralRepository`, `ManagerReferralScreen`.
+
+## Piece R1b — editable rules + falling reward (what exists now)
+Zip: `piece-13r1b-referral-rules.zip` (sorts after `piece-13r1-referral-data.zip`). Files: `data/Referral.kt`, `ui/ReferralScreens.kt`, `ui/ManagerScreens.kt` (passes `isMain = me.isMain`), `app/build.gradle.kts` (57 / 0.56.0). No database change (settings live in `meta`: `ref:pts`, `ref:need`, `ref:ugxpp`, `ref:rate`, `ref:floor`, `ref:scope`, `ref:tiers`).
+- ONLY the main manager can change the rules: the Rules tab is read-only for other managers and `ReferralRepository.saveSettings(settings, byMain, actor)` refuses when `byMain` is false. Every change is audited with all values (REFERRAL_SETTINGS).
+- Tunable: points for the FIRST referral (default 100), reduction per earlier referral (default 5.0 %, 0 = none, max 50 %), minimum points per referral (default 10), who is counted (`TEAM` = all referrals of the team, so acting early pays; `WORKER` = the referrer's own referrals), approved submissions the new worker needs (default 3), UGX per point (default 50), and the four status thresholds (default 1 / 3 / 7 / 15; must rise and start at 1 or more).
+- Falling reward: points = floor(base x (1 - rate)^earlier + 0.5), kept between the minimum and the base (`ReferralRules.pointsFor`, checked in a Python port: 100, 95, 81, 63, 38, 10 for the 1st, 2nd, 5th, 10th, 20th, 50th at 5 %). `earlier` = referrals that were recorded BEFORE this one (rejected ones do not count; same instant: smaller worker id first; scope TEAM or WORKER). It depends on the place in line, not on when the manager taps AWARD, so a slow manager never changes what a worker earns. The ledger note says "worth X of Y points because of its place in line". Points already awarded never change when the rules change.
+- Screen: READY / WAITING lines show "worth N points"; the Rules tab has a live preview ("Referral number 1, 2, 5, 10, 20, 50, 100") and the status ladder with the typed thresholds.
+- API for later pieces: `repos.referral.settings()` (class `RefSettings`), `pointsForReferral`, `thresholds()`, `ReferralRules.tierOf(awarded, mins)`, `ReferralRules.thresholdFor(index, mins)`, `ReferralRules.nextTier(awarded, mins)`.
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
@@ -758,7 +786,7 @@ Files (zip: `piece-11d-backup-send.zip`; sorts after `piece-11c-restore.zip`): `
 Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-12c-empty-states-success.zip
+- `app/build.gradle.kts` — piece-13r1b-referral-rules.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -769,9 +797,11 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `app/src/main/res/xml/file_paths.xml` — piece-11d-backup-send.zip
 - `app/src/main/AndroidManifest.xml` — piece-11d-backup-send.zip
 - `MainActivity.kt` — piece-09b-2-worker-import.zip
-- `data/CTDatabase.kt` — piece-08t3c-gifts.zip
+- `data/CTDatabase.kt` — piece-13r1-referral-data.zip
 - `data/Daos.kt` — piece-10a-learn-manager.zip
 - `data/Learn.kt` — piece-10a-learn-manager.zip
+- `data/Referral.kt` — piece-13r1b-referral-rules.zip
+- `ui/ReferralScreens.kt` — piece-13r1b-referral-rules.zip
 - `data/Entities.kt` — piece-08c-nc-claims.zip
 - `data/ManagerAccounts.kt` — piece-11a-main-login.zip
 - `data/ManagerSync.kt` — piece-05e-manager-access.zip
@@ -784,7 +814,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `data/Repositories.kt` — piece-02-data.zip
 - `data/ScreenshotChecks.kt` — piece-06-screenshot-verification.zip
 - `data/Security.kt` — piece-04c2-worker-proof.zip
-- `data/ServiceLocator.kt` — piece-10a-learn-manager.zip
+- `data/ServiceLocator.kt` — piece-13r1-referral-data.zip
 - `data/Sync.kt` — piece-11e-1-number-sync.zip
 - `data/Telegram.kt` — piece-11d-backup-send.zip
 - `data/Notify.kt` — piece-11e-2-move-phone.zip
@@ -811,7 +841,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/Components.kt` — piece-12a-touch-feel.zip
 - `ui/Forms.kt` — piece-12a-touch-feel.zip
 - `ui/ManagerAccess.kt` — piece-05e-manager-access.zip
-- `ui/ManagerScreens.kt` — piece-12c-empty-states-success.zip
+- `ui/ManagerScreens.kt` — piece-13r1b-referral-rules.zip
 - `ui/MenuDrawer.kt` — piece-12b-1-menu-manager.zip
 - `ui/NotifyScreens.kt` — piece-09d-3-notifications.zip
 - `ui/ManagerSyncScreens.kt` — piece-05e-manager-access.zip
