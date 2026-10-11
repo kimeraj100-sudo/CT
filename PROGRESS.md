@@ -102,8 +102,9 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | 16a | REPAIR + required connect window: restores the worker-home connect card (lost: `15h2` sorts AFTER `15c1` and overwrote `WorkerScreens.kt`), restores the connect help text (lost: `15h1` overwrote `15c5`'s `HelpGuide.kt`), raises the version (the repo was at 71 while 76 had been built) and adds a window that REQUIRES the worker to connect through the bot until the manager's first message arrives | DONE in piece-16a-connect-popup.zip (no DB change, app 77 / 0.76.0; build result: check Actions) |
 | 16b | Auto-connect ON by default (only an explicit OFF by the main manager turns it off) | DONE in piece-16b-auto-connect-default.zip (no DB change, app 78 / 0.77.0; needs 16a; build result: check Actions) |
 | 16c | The phone that holds the bot reads Telegram the whole time the app is open + status line on the manager home | DONE in piece-16c-manager-reads-always.zip (no DB change, app 79 / 0.78.0; needs 16b; build result: check Actions) |
-| 16d | Worker first-message step: make the manager's reply easy to open (clipboard offer + share target checked), connection status line on the worker home | NEXT |
-| 16e | Chat-style support (bubbles, one thread per worker, manager and worker side) | todo (owner asked 2026-10-11) |
+| 16d1 | Connection status line on the worker home (red not connected / yellow waiting for the reply / green connected with the time of the last message) | DONE in piece-16d1-connect-status.zip (no DB change, app 80 / 0.79.0; needs 16c; build result: check Actions) |
+| 16d2 | Easy to open the manager's reply: the clipboard is checked every time the app gets the focus (not only once a minute) and a button "I COPIED THE REPLY - USE IT" in the connect window and on the status line | DONE in piece-16d2-reply-easy.zip (no DB change, app 81 / 0.80.0; needs 16d1; build result: check Actions) |
+| 16e | Chat-style support (bubbles, one thread per worker, manager and worker side) | NEXT (owner asked 2026-10-11; split it with the SPLIT AGAIN rules) |
 | 16f | Quick replies (manager canned answers, worker quick questions) | todo (owner asked 2026-10-11) |
 
 ## What each piece contains
@@ -928,6 +929,18 @@ Zip: `piece-16b-auto-connect-default.zip` (sorts after `piece-16a-connect-popup.
 Zip: `piece-16c-manager-reads-always.zip` (sorts after 16b; no database change; app 79 / 0.78.0). Files: `ui/CTApp.kt` (app-level `LaunchedEffect` runs `repos.telegram.pollLoop`; the older reader in the manager area waits behind `loopLock`, harmless), `ui/TelegramStatus.kt` (`TgStatusLine`, shown under "Signed in as" on the manager home), `ui/ManagerScreens.kt`, `ui/TelegramScreens.kt` (texts), `ui/HelpGuide.kt` (sentence), `app/build.gradle.kts`.
 - A phone without a bot token (every worker phone) just idles in the loop (one small database read every 4 s). Messages are read while the app is open, also on the role screen and while the manager is not signed in; reading uses the actor `ManagerSession.actor` ("manager" until someone signs in).
 
+## Pieces 16d1 and 16d2 — connection status and an easier first reply (what exists now)
+Zips: `piece-16d1-connect-status.zip` (app 80 / 0.79.0) then `piece-16d2-reply-easy.zip` (app 81 / 0.80.0). Both sort after `piece-16c-manager-reads-always.zip` in the C and in the punctuation-ignoring order; checked with `sortcheck.py` and with the "last zip per file equals the owners list" test (the four changed files and the version file all end at 16d1 / 16d2). No database change, nothing stored except what already existed (`qc:sent:<worker>`).
+- 16d1 files: `ui/ConnectStatus.kt` (new: `ConnectStatusLine(repos, workerId)`), `ui/WorkerScreens.kt` (the 16a version + ONE line first in `top`), `app/build.gradle.kts`. The line shows one of three states, refreshed every 3 s from data already on the phone: red "Not connected to the manager yet" (nothing accepted from the manager, `qc:sent` not set; says: menu, Sync, SEND MY CONNECTION), yellow "Connection sent. Waiting for the manager's reply" (sent, nothing accepted yet), green "Connected to the manager" with "Last message from the manager: <time>" (latest `sync_seen.receivedAt` for direction M2W, read with `db.query` so `Sync.kt` was not touched).
+- 16d2 files: `ui/ConnectStatus.kt` (replaced: adds `useReplyFromClipboard(text, workerId)` and, in the yellow state, the button "I COPIED THE REPLY - USE IT"), `ui/WorkerIncoming.kt` (clipboard check now runs every time the window GETS THE FOCUS via `snapshotFlow { LocalWindowInfo.current.isWindowFocused }`, after a 400 ms pause so Android hands over the clipboard; minimum gap 2 s while the manager has not been heard from yet, otherwise the old 60 s), `ui/ConnectPopup.kt` (step 3 gets the same button), `app/build.gradle.kts`.
+- The button is an explicit tap, so it is the consent: if the clipboard holds a manager update made for THIS worker (`ShareInbox.countUpdatesFor`), `ShareInbox.offer(text)` hands it to `WorkerIncomingCard`, which uses it at once (same checks as always: signature, made for this worker, each message only once). Otherwise the screen says what to do (in Telegram: tap and hold the bot's reply, Copy, come back and tap again; or "that text is not an update for you").
+- Share target re-checked: `AndroidManifest.xml` has the SEND / `text/plain` filter (Share > CT Team) from piece 9B; nothing to change.
+- Honest limit (unchanged): the worker's phone cannot read the Telegram bot by itself (the bot token is never in the app), so the first reply still needs one of: Share > CT Team, or Copy then USE IT. 16d only removes the steps that were easy to miss. A truly automatic channel would need a small server, which the owner has not asked for.
+- Do not re-declare: `ConnectStatusLine`, `useReplyFromClipboard`.
+- Not compile-tested (no Kotlin/Gradle in the sandbox). Brace balance and new names were checked against the whole project. If Actions fails, paste the error log.
+
+Next: 16e (chat-style support), then 16f (quick replies). Split 16e: data/thread model first, then worker bubbles screen, then manager screen, then wiring.
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
@@ -964,7 +977,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
 - `data/TaskGate.kt` — piece-13r5a1-task-status-data.zip
-- `app/build.gradle.kts` — piece-16c-manager-reads-always.zip
+- `app/build.gradle.kts` — piece-16d2-reply-easy.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -1002,7 +1015,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `data/Notify.kt` — piece-11e-2-move-phone.zip
 - `ui/TelegramScreens.kt` — piece-16c-manager-reads-always.zip
 - `ui/ShareInbox.kt` — piece-09b-2-worker-import.zip
-- `ui/WorkerIncoming.kt` — piece-09b-2-worker-import.zip
+- `ui/WorkerIncoming.kt` — piece-16d2-reply-easy.zip
 - `ui/WorkerNotices.kt` — piece-09b-3-announcements.zip
 - `ui/OriginalCheck.kt` — piece-09c-2-review-originals.zip
 - `ui/Motion.kt` — piece-12b-3b-count-up-shimmer.zip
@@ -1010,7 +1023,8 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/SupportManager.kt` — piece-15h2-help-in-support.zip
 - `ui/HelpGuide.kt` — piece-16c-manager-reads-always.zip
 - `ui/QuickConnect.kt` — piece-15c6-connect-always.zip
-- `ui/ConnectPopup.kt` — piece-16a-connect-popup.zip
+- `ui/ConnectPopup.kt` — piece-16d2-reply-easy.zip
+- `ui/ConnectStatus.kt` — piece-16d2-reply-easy.zip (16d1 had the line without the button)
 - `data/AutoConnect.kt` — piece-16b-auto-connect-default.zip
 - `ui/AutoConnectScreens.kt` — piece-15c4-auto-connect-screen.zip
 - `data/BotConfig.kt` — piece-15c2-bot-name.zip (superseded: `piece-15c2-bot-name.zip`)
@@ -1048,7 +1062,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/WorkerNcClaim.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerPayout.kt` — piece-04c4-worker-payout.zip
 - `ui/UpdateScreens.kt` — piece-14u1-app-update.zip
-- `ui/WorkerScreens.kt` — piece-16a-connect-popup.zip
+- `ui/WorkerScreens.kt` — piece-16d1-connect-status.zip
 - `ui/WorkerReferral.kt` — piece-13r3b-referral-page.zip
 - `ui/WorkerPointsUse.kt` — piece-13r4d-points-money.zip
 - `ui/WorkerSubmit.kt` — piece-13r5c-task-status-worker.zip
