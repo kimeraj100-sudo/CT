@@ -92,6 +92,10 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | R5c | Status perks, worker screen: locked tasks stay visible with the reason, open and Submit are blocked | DONE in piece-13r5c-task-status-worker.zip (no DB change, app 68 / 0.67.0; needs R5a-2; build result: check Actions) |
 | U1 | App update: the manager announces a new version with a download link; worker banner with DOWNLOAD UPDATE and a daily reminder notification | DONE in piece-14u1-app-update.zip (no DB change, app 69 / 0.68.0; build result: check Actions) |
 | H1 | In-app help, content + card: `HelpGuide` (about 24 short answers, worker and manager) and `HelpGuideCard` (search box, tap a question to open the answer). New file only, nothing stored | DONE in piece-15h1-help-guide.zip (no DB change, app 70 / 0.69.0; needs U1; build result: check Actions) |
+| C1 | One-tap connection, worker side: `BotConfig` (the manager's bot USERNAME, never the token), worker home card "Connect to the manager" (1 OPEN THE BOT, 2 SEND MY CONNECTION opens Telegram's send screen with the code filled in; hides after the manager's first message) | DONE in piece-15c1-quick-connect.zip (no DB change, app 72 / 0.71.0; needs H2; bot name set by piece-15c2-bot-name.zip; build result: check Actions) |
+| C1b | Bot name built in: `BOT_USERNAME = "CtcommBot"` (one file, `data/BotConfig.kt`, no app version change) | DONE in piece-15c2-bot-name.zip (needs C1; build result: check Actions) |
+| C2 | Auto-connect (main manager switch, OFF by default): the manager phone approves a valid new worker by itself, worker shows as UNVERIFIED, payouts blocked until the manager verifies | NEXT |
+| C3 | Simpler worker connect screens + help text updated to the new flow | todo |
 | H2 | In-app help shown in Support: worker menu > Support has the card above the chat; manager Support list has it under the chats | DONE in piece-15h2-help-in-support.zip (no DB change, app 71 / 0.70.0; needs H1; build result: check Actions) |
 
 ## What each piece contains
@@ -811,6 +815,14 @@ Zip: `piece-13r4c-points-manager.zip` (sorts after `piece-13r4b-points-worker.zi
 
 R5a-1, R5a-2, R5b and R5c are done. Piece R5 is complete.
 
+## Piece C1 — one-tap connection, worker side (what exists now)
+
+Zip: `piece-15c1-quick-connect.zip` (sorts after `piece-15h2-help-in-support.zip`; app 72 / 0.71.0; no DB change). Files: `data/BotConfig.kt` (NEW), `ui/QuickConnect.kt` (NEW), `data/Sync.kt` (+ `managerMessagesReceived`), `ui/WorkerScreens.kt` (card first in `top`), `app/build.gradle.kts`.
+- Owner decision: connecting must be "just taps". Design: the bot USERNAME is built into the release (`BotConfig.BOT_USERNAME`). The bot TOKEN is never put in the app (an APK can be read; the token would expose every worker's ID and phone).
+- Card on the worker home until the phone has accepted its first message from the manager (`managerMessagesReceived == 0`): button 1 opens `https://t.me/<bot>` (worker taps START, a Telegram rule), optional referral field, button 2 makes the connection code (same `makeEnrollment` as before), copies it and opens Telegram's send screen (package `org.telegram.messenger`, falls back to the Android chooser). `meta` key `qc:sent:<workerId>` = "1" after sending.
+- The manager side is unchanged: the code still arrives as a connection request that must be approved (key code by voice) until C2.
+- `BOT_USERNAME` is EMPTY in this zip: the owner's bot name was not known. Send a one-file zip `piece-15c2-bot-name.zip` with `data/BotConfig.kt` holding the name (sorts after C1, so it wins).
+
 ## Pieces H1 + H2 — in-app help (what exists now)
 
 Zips: `piece-15h1-help-guide.zip` (app 70 / 0.69.0) then `piece-15h2-help-in-support.zip` (app 71 / 0.70.0). No database change.
@@ -915,7 +927,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
 - `data/TaskGate.kt` — piece-13r5a1-task-status-data.zip
-- `app/build.gradle.kts` — piece-15h2-help-in-support.zip
+- `app/build.gradle.kts` — piece-15c1-quick-connect.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -946,7 +958,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `data/ScreenshotChecks.kt` — piece-06-screenshot-verification.zip
 - `data/Security.kt` — piece-04c2-worker-proof.zip
 - `data/ServiceLocator.kt` — piece-13r4a-points-data.zip
-- `data/Sync.kt` — piece-14u1-app-update.zip
+- `data/Sync.kt` — piece-15c1-quick-connect.zip
 - `data/ReferralView.kt` — piece-13r3a-referral-view-data.zip
 - `data/Telegram.kt` — piece-14u1-app-update.zip
 - `data/AppUpdate.kt` — piece-14u1-app-update.zip
@@ -960,6 +972,8 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/Polish.kt` — piece-12c-empty-states-success.zip
 - `ui/SupportManager.kt` — piece-15h2-help-in-support.zip
 - `ui/HelpGuide.kt` — piece-15h1-help-guide.zip
+- `ui/QuickConnect.kt` — piece-15c1-quick-connect.zip
+- `data/BotConfig.kt` — piece-15c2-bot-name.zip (superseded: `piece-15c2-bot-name.zip`)
 - `ui/LearnManager.kt` — piece-12c-empty-states-success.zip
 - `ui/Support.kt` — piece-09d-2a-support-worker.zip
 - `data/Team.kt` — piece-08t3a-mined-days.zip
@@ -994,7 +1008,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/WorkerNcClaim.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerPayout.kt` — piece-04c4-worker-payout.zip
 - `ui/UpdateScreens.kt` — piece-14u1-app-update.zip
-- `ui/WorkerScreens.kt` — piece-15h2-help-in-support.zip
+- `ui/WorkerScreens.kt` — piece-15c1-quick-connect.zip
 - `ui/WorkerReferral.kt` — piece-13r3b-referral-page.zip
 - `ui/WorkerPointsUse.kt` — piece-13r4d-points-money.zip
 - `ui/WorkerSubmit.kt` — piece-13r5c-task-status-worker.zip
