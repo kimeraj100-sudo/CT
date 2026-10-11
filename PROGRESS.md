@@ -89,7 +89,7 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | R5a-1 | Status perks, data: `tasks.minTier` (DB v17), TaskRepository create / update / snapshot carry it, `TaskGate` (names, who passes, reason text, manager-side and worker-side check). No screens, no message | DONE in piece-13r5a1-task-status-data.zip (DB v17, app 65 / 0.64.0; needs R4d; build result: check Actions) |
 | R5a-2 | Status perks, messages + enforcement: the TASK message carries `mt` (optional), the worker phone stores it, the manager phone REFUSES an imported submission whose worker has too low a status | DONE in piece-13r5a2-task-status-message.zip (no DB change, app 66 / 0.65.0; needs R5a-1; build result: check Actions) |
 | R5b | Status perks, manager screen: "Who can do this task" chips (Everyone / Builder / Leader / Champion) in the task editor, a lock label in the task list | DONE in piece-13r5b-task-status-manager.zip (no DB change, app 67 / 0.66.0; needs R5a-2; build result: check Actions) |
-| R5c | Status perks, worker screen: locked tasks stay visible with the reason, open and Submit are blocked | NEXT |
+| R5c | Status perks, worker screen: locked tasks stay visible with the reason, open and Submit are blocked | DONE in piece-13r5c-task-status-worker.zip (no DB change, app 68 / 0.67.0; needs R5a-2; build result: check Actions) |
 
 ## What each piece contains
 1. **Foundation** — compiling project, fixed signing key, launcher icon from the approved logo, jewel theme, animated logo opening with gold light-sweep, Manager/Worker choice screen, different transition per button.
@@ -806,7 +806,7 @@ Zip: `piece-13r4c-points-manager.zip` (sorts after `piece-13r4b-points-worker.zi
 - Tab: explanation (approve takes the points and writes down the UGX or gift; it does not send money; the worker sees it with the next update; rate shown), then up to 30 requests, WAITING first. Each: worker name, Cash-out / Gift, points, time, the worker's words, the worker's REAL balance now (red when not enough), for a cash-out "If approved: UGX points x rate", for a gift a field "What the gift is", a note field (needed to reject; shown to the worker), APPROVE (two taps: "TAP AGAIN: TAKE N POINTS AND APPROVE"), REJECT. Approved: the amount or gift, the note, "Not paid yet" + MARK PAID / MARK GIVEN (two taps) or "Paid / Given <time>". Rejected: the reason. Every manager (not only the main one) can decide; the audit log names who.
 - Do not re-declare: `RfRequestsTab`. Not compile-tested. If Actions fails, paste the error log.
 
-Next: R5c (the worker sees locked tasks). R5a-1, R5a-2 and R5b are done.
+R5a-1, R5a-2, R5b and R5c are done. Piece R5 is complete.
 
 ## Piece R5 — status perks, split into R5a-1, R5a-2, R5b, R5c (owner asked for smaller parts)
 Idea: a task can ask for a lowest referral status (R1 ladder: Member 0, Connector 1, Builder 2, Leader 3, Champion 4; awarded-referral thresholds default 1 / 3 / 7 / 15, editable by the main manager). The owner's list for tasks is Builder, Leader, Champion; the data accepts any real level.
@@ -851,6 +851,14 @@ Owner decision (2026-10-11): "the main manager can decide on the current week's 
 - Limits: WEEKLY only rides on a weekly payout that has approved tasks in it (a worker with only points and no approved tasks cannot trigger it; use HAND for that); the amount the worker sees on a not-yet-paid payout request does not include the points; a backup made before this build restores fine (Room migrates v15 -> v16). Do not re-declare: `PointsPayMethod`.
 - Not compile-tested (no Kotlin/Gradle in the sandbox). Brace balance and new names were checked against the whole project. If Actions fails, paste the error log.
 
+### R5c — worker screen (what exists now)
+Zip: `piece-13r5c-task-status-worker.zip` (sorts after `piece-13r5b-task-status-manager.zip`; app 68 / 0.67.0; no DB change). Files: `ui/WorkerTasks.kt`, `ui/WorkerScreens.kt`, `ui/WorkerSubmit.kt`, `app/build.gradle.kts`.
+- `TaskState` has a new value `LOCKED`. `buildTaskCards(tasks, subs, nowMs, view = null)`: a task that would be AVAILABLE becomes LOCKED when `TaskGate.checkOnWorker(view, minTier)` says no; the card note is the reason. Tasks already waiting or done keep that state. Locked cards sort last and do not count as "ready".
+- `WorkerScreens.kt` loads `ReferralViewCodec.load(repos.db, workerId)` into `refView` (reloaded when the menu section, submissions or tasks change) and passes it in.
+- List: a locked card shows a red "Locked" tag and "🔒 reason", and is not clickable. Detail (if reached): shows only the lock card with the reason, no Submit, no deposit button. Submit screen: a locked task shows "This task is locked." plus the reason.
+- Demo data unchanged (new fields have defaults).
+- Gap: the manager phone is the final check (R5a-2 refuses at import); a worker with an out-of-date status can see a task as locked until the next REFERRAL_VIEW is imported.
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
@@ -887,7 +895,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
 - `data/TaskGate.kt` — piece-13r5a1-task-status-data.zip
-- `app/build.gradle.kts` — piece-13r5b-task-status-manager.zip
+- `app/build.gradle.kts` — piece-13r5c-task-status-worker.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -963,11 +971,11 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/WorkerHistory.kt` — piece-04c3-worker-history.zip
 - `ui/WorkerNcClaim.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerPayout.kt` — piece-04c4-worker-payout.zip
-- `ui/WorkerScreens.kt` — piece-13r4b-points-worker.zip
+- `ui/WorkerScreens.kt` — piece-13r5c-task-status-worker.zip
 - `ui/WorkerReferral.kt` — piece-13r3b-referral-page.zip
 - `ui/WorkerPointsUse.kt` — piece-13r4d-points-money.zip
-- `ui/WorkerSubmit.kt` — piece-08b-z-fix-pickedfile.zip
-- `ui/WorkerTasks.kt` — piece-08c-nc-claims.zip
+- `ui/WorkerSubmit.kt` — piece-13r5c-task-status-worker.zip
+- `ui/WorkerTasks.kt` — piece-13r5c-task-status-worker.zip
 - `ui/WorkerTeam.kt` — piece-08t3c-gifts.zip
 - `app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml` — piece-01-foundation.zip
 - `app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml` — piece-01-foundation.zip
