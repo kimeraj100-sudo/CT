@@ -91,6 +91,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | R5b | Status perks, manager screen: "Who can do this task" chips (Everyone / Builder / Leader / Champion) in the task editor, a lock label in the task list | DONE in piece-13r5b-task-status-manager.zip (no DB change, app 67 / 0.66.0; needs R5a-2; build result: check Actions) |
 | R5c | Status perks, worker screen: locked tasks stay visible with the reason, open and Submit are blocked | DONE in piece-13r5c-task-status-worker.zip (no DB change, app 68 / 0.67.0; needs R5a-2; build result: check Actions) |
 | U1 | App update: the manager announces a new version with a download link; worker banner with DOWNLOAD UPDATE and a daily reminder notification | DONE in piece-14u1-app-update.zip (no DB change, app 69 / 0.68.0; build result: check Actions) |
+| H1 | In-app help, content + card: `HelpGuide` (about 24 short answers, worker and manager) and `HelpGuideCard` (search box, tap a question to open the answer). New file only, nothing stored | DONE in piece-15h1-help-guide.zip (no DB change, app 70 / 0.69.0; needs U1; build result: check Actions) |
+| H2 | In-app help shown in Support: worker menu > Support has the card above the chat; manager Support list has it under the chats | DONE in piece-15h2-help-in-support.zip (no DB change, app 71 / 0.70.0; needs H1; build result: check Actions) |
 
 ## What each piece contains
 1. **Foundation** — compiling project, fixed signing key, launcher icon from the approved logo, jewel theme, animated logo opening with gold light-sweep, Manager/Worker choice screen, different transition per button.
@@ -809,6 +811,14 @@ Zip: `piece-13r4c-points-manager.zip` (sorts after `piece-13r4b-points-worker.zi
 
 R5a-1, R5a-2, R5b and R5c are done. Piece R5 is complete.
 
+## Pieces H1 + H2 — in-app help (what exists now)
+
+Zips: `piece-15h1-help-guide.zip` (app 70 / 0.69.0) then `piece-15h2-help-in-support.zip` (app 71 / 0.70.0). No database change.
+- H1 `ui/HelpGuide.kt` (NEW): `HelpTopic(title, forWorker, forManager, words, body)`, `HelpGuide.topics` (the answers: connect, bot silent, open an update, tasks and proof, locked task, rejected, payout, payout number, referrals, points, team mining, learn, forgotten password, new phone, app update, safety; manager: bot setup, approve a worker, tasks, review, pay, referrals, backup, support), `HelpGuide.find(isManager, query)` (every typed word must appear in title, extra words or answer), `HelpGuideCard(isManager)` (search box + tap to open). To add an answer, add one HelpTopic.
+- H2: worker menu > Support shows `HelpGuideCard(isManager = false)` above the chat (`ui/WorkerScreens.kt`, the "support" section); manager Support list shows `HelpGuideCard(isManager = true)` under the chats (`ui/SupportManager.kt`).
+- Menu names used inside the answers must match the real menu (Change payout number, Referrals & status, Learn & Earn, Sync, Support). If a menu is renamed, edit the text in `HelpGuide.kt`.
+- Public web version of the same guide: a separate `index.html` the owner publishes on GitHub Pages (not part of the app build).
+
 ## Piece R5 — status perks, split into R5a-1, R5a-2, R5b, R5c (owner asked for smaller parts)
 Idea: a task can ask for a lowest referral status (R1 ladder: Member 0, Connector 1, Builder 2, Leader 3, Champion 4; awarded-referral thresholds default 1 / 3 / 7 / 15, editable by the main manager). The owner's list for tasks is Builder, Leader, Champion; the data accepts any real level.
 Zip names (sort after `piece-13r4d-points-money.zip`): `piece-13r5a1-task-status-data.zip`, then `piece-13r5a2-...`, `piece-13r5b-...`, `piece-13r5c-...`.
@@ -905,7 +915,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
 - `data/TaskGate.kt` — piece-13r5a1-task-status-data.zip
-- `app/build.gradle.kts` — piece-14u1-app-update.zip
+- `app/build.gradle.kts` — piece-15h2-help-in-support.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -948,7 +958,8 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/OriginalCheck.kt` — piece-09c-2-review-originals.zip
 - `ui/Motion.kt` — piece-12b-3b-count-up-shimmer.zip
 - `ui/Polish.kt` — piece-12c-empty-states-success.zip
-- `ui/SupportManager.kt` — piece-12c-empty-states-success.zip
+- `ui/SupportManager.kt` — piece-15h2-help-in-support.zip
+- `ui/HelpGuide.kt` — piece-15h1-help-guide.zip
 - `ui/LearnManager.kt` — piece-12c-empty-states-success.zip
 - `ui/Support.kt` — piece-09d-2a-support-worker.zip
 - `data/Team.kt` — piece-08t3a-mined-days.zip
@@ -983,7 +994,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/WorkerNcClaim.kt` — piece-08c-nc-claims.zip
 - `ui/WorkerPayout.kt` — piece-04c4-worker-payout.zip
 - `ui/UpdateScreens.kt` — piece-14u1-app-update.zip
-- `ui/WorkerScreens.kt` — piece-14u1-app-update.zip
+- `ui/WorkerScreens.kt` — piece-15h2-help-in-support.zip
 - `ui/WorkerReferral.kt` — piece-13r3b-referral-page.zip
 - `ui/WorkerPointsUse.kt` — piece-13r4d-points-money.zip
 - `ui/WorkerSubmit.kt` — piece-13r5c-task-status-worker.zip
