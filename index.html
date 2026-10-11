@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>CT Team App Guide</title>
+<style>
+:root{--bg:#0b1530;--card:#13224a;--line:#24366b;--text:#eaf0ff;--soft:#a9b8e0;--gold:#f2c14e;--ok:#3ddc97}
+@media (prefers-color-scheme: light){:root{--bg:#f4f6fc;--card:#fff;--line:#d7def0;--text:#14204a;--soft:#4a5a85;--gold:#9a6b00;--ok:#0a8f5c}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:26px;margin:8px 0 4px;color:var(--gold)}
+h2{font-size:19px;margin:28px 0 8px;color:var(--gold)}
+p,li{color:var(--text)}
+.soft{color:var(--soft);font-size:14px}
+details{background:var(--card);border:1px solid var(--line);border-radius:12px;margin:8px 0;padding:0 14px}
+summary{cursor:pointer;padding:13px 0;font-weight:600;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";float:right;color:var(--gold);font-size:20px;line-height:1}
+details[open] summary::after{content:"–"}
+details>div{padding:0 0 12px}
+ol,ul{padding-left:20px;margin:6px 0}
+code{background:rgba(127,127,127,.18);padding:1px 6px;border-radius:5px;font-size:14px}
+.tip{border-left:3px solid var(--ok);padding:6px 12px;margin:10px 0;background:rgba(61,220,151,.08);border-radius:0 8px 8px 0}
+.warn{border-left:3px solid var(--gold);padding:6px 12px;margin:10px 0;background:rgba(242,193,78,.1);border-radius:0 8px 8px 0}
+nav a{display:inline-block;margin:3px 6px 3px 0;padding:6px 12px;border:1px solid var(--line);border-radius:999px;color:var(--text);text-decoration:none;font-size:14px}
+footer{margin-top:36px}
+</style>
+</head>
+<body>
+<main>
+<h1>CT Team — App Guide</h1>
+<p class="soft">What the CT Team app does and how to use each part. The app keeps everything on your own phone: there is no server and no account on the internet. Menu names can differ slightly between versions.</p>
+
+<nav>
+<a href="#start">Start</a><a href="#worker">Worker</a><a href="#telegram">Telegram</a><a href="#referral">Referrals</a><a href="#manager">Manager</a><a href="#safe">Safety</a>
+</nav>
+
+<h2 id="start">1. The basics</h2>
+<details open><summary>What is CT Team?</summary><div>
+<p>CT Team is an Android app for a team of workers and their managers in Uganda. Managers give out tasks. Workers do them and send proof. Managers check the proof, approve it, and pay in UGX. The app also tracks team mining, lessons, support chats and referral rewards.</p>
+<p>When you open the app you choose <b>Manager</b> or <b>Worker</b>.</p>
+</div></details>
+<details><summary>Installing and updating</summary><div>
+<ol><li>Download the APK your team lead gives you and open it.</li>
+<li>If Android asks, allow installing from this source.</li>
+<li>Updates install over the old app and keep your data. Never uninstall to update, because your data lives on the phone.</li></ol>
+</div></details>
+<details><summary>The three-bar menu</summary><div>
+<p>At the top right of the home screen is a three-bar button. It opens a full-screen menu with every feature in groups, so the home screen only shows what you need each day. A dot next to an item means something is waiting for you.</p>
+</div></details>
+
+<h2 id="worker">2. For workers</h2>
+<details><summary>Create your account and sign in</summary><div>
+<ol><li>Choose <b>Worker</b> and register: your name, National ID and your MTN or Airtel payout number.</li>
+<li>Pick a username, a password and a PIN.</li>
+<li>After that you can unlock with your PIN. The quick unlock lasts 30 days, then the app asks for your password again.</li></ol>
+<p class="soft">There is also a <b>Demo</b> login so you can look around with sample data first.</p>
+</div></details>
+<details><summary>Connect to your manager (do this once)</summary><div>
+<p>A card called <b>Connect to the manager</b> is on your home screen until you are connected.</p>
+<ol><li>Tap <b>1 Open the bot, tap START</b>. Telegram opens the team's bot (<code>@CtcommBot</code>). Tap <b>START</b> once. This is Telegram's own rule.</li>
+<li>Go back to the app. If a friend invited you, type their referral code. Then tap <b>2 Send my connection</b>.</li>
+<li>In Telegram, choose the bot and tap send.</li></ol>
+<p>That is all. If your manager uses auto-connect you are connected in a moment and the card disappears. Otherwise your manager may phone you to compare a <b>key code</b>: read yours aloud.</p>
+<div class="tip">Until a manager verifies you, you can work and send reports, but payouts and referral points wait. Tell your manager your full name so they can verify you.</div>
+<div class="warn">Never send your connection code in a group chat.</div>
+</div></details>
+<details><summary>Tasks and sending proof</summary><div>
+<ol><li>Open <b>Tasks</b>. You see the daily and one-time tasks your manager sent you, with the pay for each.</li>
+<li>Open a task to see what is needed and the example.</li>
+<li>Do the task, then attach your proof (a screenshot) and submit.</li>
+<li>Your submission stays on your phone until you send your report to the manager (below).</li></ol>
+<div class="tip">Send the original picture, not a copy shared through a chat app. Chat apps shrink pictures and the check may fail. Sending it as a <b>file</b> keeps it exact.</div>
+</div></details>
+<details><summary>Sending reports and getting updates</summary><div>
+<ul><li><b>Send report:</b> makes a signed message with your new submissions and payout requests. Send it to the manager's bot or chat.</li>
+<li><b>Updates:</b> when the manager replies with new tasks, decisions or notices, they arrive as messages. Open them from Telegram with <b>Share &gt; CT Team</b> and the app imports them. You can also paste them.</li>
+<li>Each message works only once, so sending the same one twice is safe.</li></ul>
+</div></details>
+<details><summary>Earnings, history and payouts</summary><div>
+<ul><li><b>History</b> shows every submission and whether it is approved, rejected or waiting.</li>
+<li><b>Earnings</b> shows what you have earned in UGX.</li>
+<li><b>Payout:</b> ask for a payout to your MTN or Airtel number. You see the status until the manager marks it paid.</li>
+<li>Changed number? Use <b>Payout number</b> in the menu so the manager knows.</li></ul>
+</div></details>
+<details><summary>Team mining</summary><div>
+<p>The Team mining page shows how the team is doing: the weekly goal, your share, your level, streaks and badges, the leaderboard and any gift or bonus period the manager announced. Your share depends on your recent contributions.</p>
+</div></details>
+<details><summary>Learn &amp; Earn</summary><div>
+<p>Lessons from your manager show up here, sorted by category. Read them, open the video or picture link if there is one, and tick <b>Read</b>.</p>
+</div></details>
+<details><summary>Support chat</summary><div>
+<p>Open <b>Support</b> in the menu and write to your manager. Your message travels with your next report. The reply comes back as a signed message and appears in your chat.</p>
+</div></details>
+<details><summary>Notices and reminders</summary><div>
+<p>Notices from your manager show on your home screen. The app can also remind you, at most once a day, when you have things you have not sent yet. Allow notifications when Android asks.</p>
+</div></details>
+
+<h2 id="telegram">3. Connecting through Telegram</h2>
+<details open><summary>Manager: set up the bot (once)</summary><div>
+<ol><li>In Telegram, search for <code>@BotFather</code> and send <code>/newbot</code>. Choose a name.</li>
+<li>BotFather gives you a <b>token</b>. Keep it secret. Anyone with it controls your bot.</li>
+<li>In the app open the Telegram screen and paste the token.</li>
+<li>Tell your workers the name of your bot.</li></ol>
+</div></details>
+<details open><summary>Worker: connect to the bot</summary><div>
+<ol><li>On the home screen tap <b>Open the bot, tap START</b>, then tap START in Telegram.</li>
+<li>Back in the app tap <b>Send my connection</b>, pick the bot and send. Use a private chat, never a group.</li>
+<li>Wait for the manager. After that, updates arrive in the same chat. To open an update, share it from Telegram to <b>CT Team</b>.</li></ol>
+</div></details>
+<details><summary>Manager: how messages are read</summary><div>
+<p>While the manager area is open, the app reads waiting messages from the bot and imports them with the same checks as pasting. Things that need a tap, like a new connection request, wait in an inbox. The app can also send updates, reset codes and announcements to a worker's linked chat.</p>
+</div></details>
+
+<h2 id="referral">4. Referrals, status and points</h2>
+<details><summary>How it works for workers</summary><div>
+<ol><li>Open the menu &gt; <b>Referrals &amp; status</b>. You have one personal code, like <code>CT-K7M2P</code>. Use <b>Copy</b> or <b>Share</b> to send it with a ready message.</li>
+<li>A friend types your code when they connect.</li>
+<li>When your friend has enough <b>approved</b> work, the manager awards you points.</li></ol>
+<ul><li><b>Points:</b> early referrals earn more. Each earlier referral lowers the next reward by a percentage, so refer quickly.</li>
+<li><b>Status:</b> more awarded referrals move you up the ladder (Member, Connector, Builder, Leader, Champion). Spending points never lowers your status.</li>
+<li><b>Using points:</b> in the same page, send a request to turn points into money or a gift. The manager approves it and marks it paid or given. You see the progress under <b>My requests</b>.</li></ul>
+<div class="tip">You cannot use your own code, change who referred you, or form circles. Only one level counts.</div>
+</div></details>
+<details><summary>How it works for managers</summary><div>
+<ul><li>Menu &gt; <b>Referrals</b> has tabs: <b>Referrals</b> (award or reject), <b>Points</b>, <b>Codes</b> (add or fix a referral by hand), <b>Requests</b> (worker point requests) and <b>Rules</b>.</li>
+<li>Only the <b>main manager</b> can change the rules: points per referral, the reduction per earlier referral, the minimum, how many approved submissions a new worker needs, UGX per point and the status steps. A live table shows what the 1st, 2nd, 5th, 10th and later referrals would earn.</li>
+<li>The main manager also chooses how cash-outs are paid.</li></ul>
+</div></details>
+
+<h2 id="manager">5. For managers</h2>
+<details><summary>Sign in and manager accounts</summary><div>
+<p>Each manager has a code name, a password and a PIN. The main manager can add up to 20 managers, give each a random unique PIN, and reset, disable or enable them. The main manager's account is for the team owner only, so never share it.</p>
+</div></details>
+<details><summary>Workers, auto-connect and tasks</summary><div>
+<ul><li><b>Auto-connect (main manager):</b> menu &gt; Auto-connect &gt; ON. New workers who send their code to the bot are connected at once and listed under <b>Not verified</b>. Check who they are, then press <b>Verify</b>. Until then their payouts and referral points are blocked.</li>
+<li>A worker you already added, or a code with a problem, is always approved by hand: compare the key code by phone, then approve.</li>
+<li>Create tasks: daily or one-time, with pay, example links and the proof needed. You can set who may do a task (Everyone, Builder, Leader, Champion).</li>
+<li>Send tasks to workers as signed updates, through Telegram or by copy.</li></ul>
+</div></details>
+<details><summary>Review and verification</summary><div>
+<ul><li><b>Review</b> lists submissions to approve or reject, with an audit log.</li>
+<li>Each screenshot is checked for duplicates and tampering. You can ask the worker for the original picture and the app compares it with the report.</li></ul>
+</div></details>
+<details><summary>Payouts and statements</summary><div>
+<ul><li>See payout requests, pay them, and mark them paid. The worker gets the status.</li>
+<li>Import wallet statements (PDF) so the app can match what workers claim to the real payments, one to one, with a manual override when needed.</li></ul>
+</div></details>
+<details><summary>Team mining tools</summary><div>
+<p>Set the daily mined amount, the weekly goal and the machines (rigs), use the what-if calculator, give gifts or bonus periods (a reason is required), and see the leaderboard, quiet workers and weekly summaries. Summaries and announcements can be sent on Telegram.</p>
+</div></details>
+<details><summary>Learn, support and announcements</summary><div>
+<ul><li><b>Learn:</b> write lessons, save as drafts, publish or hide them, then send them to workers.</li>
+<li><b>Support:</b> a list of chats with an unread badge. Open one and reply.</li>
+<li><b>Announcements:</b> one message, signed separately for each worker.</li></ul>
+</div></details>
+<details><summary>Backup and moving to a new phone</summary><div>
+<ol><li><b>Backup:</b> menu &gt; Backup. Choose a passphrase and save the encrypted file. Send a copy to Telegram, Drive or an SD card. Keep the passphrase safe: without it the backup cannot be opened.</li>
+<li><b>Restore:</b> read the preview, type RESTORE to confirm. The app keeps a safety copy so you can undo.</li>
+<li><b>New phone:</b> use <b>Move to a new phone</b> and follow the checklist, then <b>Retire this phone</b> on the old one. Workers then use <b>The manager has a new phone</b> on their side.</li></ol>
+<div class="warn">Backup often. The data lives only on your phone. A lost phone without a backup means lost records.</div>
+</div></details>
+
+<h2 id="safe">6. Staying safe</h2>
+<details><summary>Rules to follow</summary><div>
+<ul><li>Never share your password, PIN, key code or bot token.</li>
+<li>Send connection codes only in a private chat.</li>
+<li>Compare the key code by phone before approving a worker.</li>
+<li>Only install the APK from your team lead.</li>
+<li>Do not post screenshots that show IDs, numbers or codes.</li></ul>
+</div></details>
+<details><summary>Something went wrong?</summary><div>
+<ul><li><b>Message not accepted:</b> each message works once, and the worker must be connected first.</li>
+<li><b>No messages from the bot:</b> the worker must press START in the bot chat.</li>
+<li><b>New phone or reinstall:</b> the manager uses <b>Reset sync key</b> for that worker, then the worker connects again and the key code is compared by voice.</li>
+<li>Still stuck? Use Support in the app or ask your manager.</li></ul>
+</div></details>
+
+<footer class="soft">CT Team guide. Unofficial community guide for the team. Not financial advice: earnings depend on approved work.</footer>
+</main>
+</body>
+</html>

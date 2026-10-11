@@ -96,7 +96,7 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | C1b | Bot name built in: `BOT_USERNAME = "CtcommBot"` (one file, `data/BotConfig.kt`, no app version change) | DONE in piece-15c2-bot-name.zip (needs C1; build result: check Actions) |
 | C2a | Auto-connect, data + rules (no screen): `AutoConnect` (switch `ac:on`, list `ac:unv`), Telegram enrollment auto-approved for a NEW worker with no problem, chat bound, first update sent; payout confirmation and referral award refused while a worker is unverified | DONE in piece-15c3-auto-connect-data.zip (no DB change, app 73 / 0.72.0; needs C1b; build result: check Actions) |
 | C2b | Auto-connect screen: menu > Auto-connect (ON / OFF for the main manager, list "Not verified" with VERIFY for every manager) | DONE in piece-15c4-auto-connect-screen.zip (no DB change, app 74 / 0.73.0; needs C2a; build result: check Actions) |
-| C3 | Simpler worker connect screens (old Connect card shortened) + help text and web guide updated to the new flow | NEXT |
+| C3 | Help text (in-app `HelpGuide.kt`) and the public guide updated to the one-tap connect, auto-connect and verify | DONE in piece-15c5-help-connect.zip (no DB change, app 75 / 0.74.0; needs C2b; build result: check Actions). The old Connect card under Sync is unchanged on purpose (it still works as a fallback) |
 | H2 | In-app help shown in Support: worker menu > Support has the card above the chat; manager Support list has it under the chats | DONE in piece-15h2-help-in-support.zip (no DB change, app 71 / 0.70.0; needs H1; build result: check Actions) |
 
 ## What each piece contains
@@ -938,7 +938,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
 - `data/TaskGate.kt` — piece-13r5a1-task-status-data.zip
-- `app/build.gradle.kts` — piece-15c4-auto-connect-screen.zip
+- `app/build.gradle.kts` — piece-15c5-help-connect.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -982,7 +982,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/Motion.kt` — piece-12b-3b-count-up-shimmer.zip
 - `ui/Polish.kt` — piece-12c-empty-states-success.zip
 - `ui/SupportManager.kt` — piece-15h2-help-in-support.zip
-- `ui/HelpGuide.kt` — piece-15h1-help-guide.zip
+- `ui/HelpGuide.kt` — piece-15c5-help-connect.zip
 - `ui/QuickConnect.kt` — piece-15c1-quick-connect.zip
 - `data/AutoConnect.kt` — piece-15c3-auto-connect-data.zip
 - `ui/AutoConnectScreens.kt` — piece-15c4-auto-connect-screen.zip
