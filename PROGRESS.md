@@ -80,7 +80,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | R1 | Referral rewards, data + manager screen: referral codes, referral links, points ledger, status ladder, rules (DB v14) | DONE in piece-13r1-referral-data.zip (DB v14, app 56 / 0.55.0; needs 12c; build result: check Actions) |
 | R1b | Referral rules editable by the MAIN manager only (points, reduction per referral, minimum, team or own count, approved work needed, UGX per point, status steps) + live preview | DONE in piece-13r1b-referral-rules.zip (no DB change, app 57 / 0.56.0; needs R1; build result: check Actions) |
 | R2 | Worker types a referral code when connecting (ENROLL gets field `rc`), manager sees it when approving the enrollment and the referral is recorded | DONE in piece-13r2-referral-code.zip (no DB change, app 58 / 0.57.0; needs R1; build result: check Actions) |
-| R3 | REFERRAL_VIEW update to the worker (code, points, status, referrals and their progress) + worker "Referrals & status" menu page with share text | NEXT |
+| R3a | REFERRAL_VIEW update to the worker, data only (manager builds it, worker phone checks and keeps it; no screens) | DONE in piece-13r3a-referral-view-data.zip (no DB change, app 59 / 0.58.0; needs R2; build result: check Actions) |
+| R3b | Worker "Referrals & status" page in the three-bar menu: my code (COPY + SHARE text), status ladder with progress to the next status, points balance, my referrals and their progress (reads `ReferralViewCodec.load`) | NEXT |
 | R4 | Points spending: worker asks to use points (cash-out at the manager's UGX per point, or a gift), manager approves; ledger REDEEM entry; link to T3c gifts / payout | todo |
 | R5 | Status perks: a task can ask for a minimum status (Builder, Leader, Champion); TASK message carries it; worker sees locked tasks with the reason | todo |
 
@@ -761,6 +762,17 @@ Zip: `piece-13r2-referral-code.zip` (sorts after `piece-13r1b-referral-rules.zip
 - The manager can still add or fix a referral by hand in Referrals > Codes (R1).
 - Not changed: the "join code" made by the manager (no referral field), Telegram (still says open Sync to approve).
 
+## Piece R3a — referral figures to the worker, data only (what exists now)
+Zip: `piece-13r3a-referral-view-data.zip` (sorts after `piece-13r2-referral-code.zip`; no database change, DB stays v14; app 59 / 0.58.0). Files: `data/ReferralView.kt` (new), `data/Sync.kt` (replaced, patched with assert-once edits), `app/build.gradle.kts`. No screens in this zip (R3b).
+- New manager -> worker update type `SyncRepository.TYPE_REFERRAL_VIEW = "REFERRAL_VIEW"` (in `WORKER_TYPES`, dispatched to `applyReferralView`, built in `collectUpdateItems` right after the TEAM_VIEW item, item key `RV:<workerId>:<rev>`). It rides the normal update flow, so "send updates (new only / everything)", Telegram send and copy-code all carry it with no extra work. Because every worker gets a code, every worker will show ONE new pending update after this build; that is expected.
+- Manager phone: `ReferralViewCodec.build(db, repo, workerId)` makes the worker's code if missing (`codeFor`), then the body: `rev`, `at`, `cd` code, `bal` points balance, `aw` awarded referrals, `th` the four thresholds, `nd` approved submissions needed, `up` UGX per point, `rf` the worker's OWN referrals (newest 30: `n` first name + last initial, `s` P waiting / A awarded / R rejected, `ap` approved submissions so far, `pt` points awarded or, while waiting, what it is worth now, `at`). Same data gives the same message; any change in points, status, referrals or rules gives a new `rev` (meta keys `ref:vfp:`, `ref:vrev:`, `ref:vat:` + workerId). Never sent: the worker's own referrer, other workers' referrals, refusal notes.
+- Worker phone: `ReferralViewCodec.apply` validates (code `CT-` + 5 letters/digits, balance within +-1e9, awarded 0..100000, four rising thresholds, need 1..100, UGX per point 0..1,000,000; a broken referral line is skipped, the rest is used), keeps the newest only (`ref:vjson:<w>`, `ref:vrevin:<w>`), audit `REFERRAL_VIEW_RECEIVED`. `ReferralViewCodec.load(db, workerId)` returns `ReferralView?` with helpers `tier()`, `nextTier()`, `toNext()`, `worthUgx()`, `waiting()` and the list `entries` (`RefViewEntry`).
+- Do not re-declare: `RefViewEntry`, `ReferralView`, `ReferralViewApply`, `ReferralViewCodec`.
+- Workers on an OLD app refuse this message type (it is unknown to them): update the workers' app first, then send updates.
+- Not compile-tested (no Kotlin/Gradle in the sandbox). Brace balance and new names were checked against the whole project. If Actions fails, paste the error log.
+
+Next: R3b (the worker page). Read `ui/WorkerScreens.kt` (three-bar menu of the worker home, `WRoute`) and `ui/WorkerTasks.kt` (`WRoute`); use `ReferralViewCodec.load`.
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
@@ -796,7 +808,7 @@ Files (zip: `piece-11d-backup-send.zip`; sorts after `piece-11c-restore.zip`): `
 Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-13r1b-referral-rules.zip
+- `app/build.gradle.kts` — piece-13r3a-referral-view-data.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -825,7 +837,8 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `data/ScreenshotChecks.kt` — piece-06-screenshot-verification.zip
 - `data/Security.kt` — piece-04c2-worker-proof.zip
 - `data/ServiceLocator.kt` — piece-13r1-referral-data.zip
-- `data/Sync.kt` — piece-13r2-referral-code.zip
+- `data/Sync.kt` — piece-13r3a-referral-view-data.zip
+- `data/ReferralView.kt` — piece-13r3a-referral-view-data.zip
 - `data/Telegram.kt` — piece-11d-backup-send.zip
 - `data/Notify.kt` — piece-11e-2-move-phone.zip
 - `ui/TelegramScreens.kt` — piece-09c-1-original-pictures.zip
