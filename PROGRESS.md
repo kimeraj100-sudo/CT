@@ -100,9 +100,11 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | C1c | Owner could not see the one-tap card (it hides once the phone has accepted any manager message) and still saw the manual codes: the card now ALWAYS shows at the top of worker menu > Sync; the old code screen is behind "MANUAL CONNECTION WITH CODES (ADVANCED)" | DONE in piece-15c6-connect-always.zip (no DB change, app 76 / 0.75.0; needs C3; build result: check Actions) |
 | H2 | In-app help shown in Support: worker menu > Support has the card above the chat; manager Support list has it under the chats | DONE in piece-15h2-help-in-support.zip (no DB change, app 71 / 0.70.0; needs H1; build result: check Actions) |
 | 16a | REPAIR + required connect window: restores the worker-home connect card (lost: `15h2` sorts AFTER `15c1` and overwrote `WorkerScreens.kt`), restores the connect help text (lost: `15h1` overwrote `15c5`'s `HelpGuide.kt`), raises the version (the repo was at 71 while 76 had been built) and adds a window that REQUIRES the worker to connect through the bot until the manager's first message arrives | DONE in piece-16a-connect-popup.zip (no DB change, app 77 / 0.76.0; build result: check Actions) |
-| 16b | Auto-connect ON by default (an explicit OFF set by the main manager is kept), so a new worker is connected the moment their code reaches the bot | NEXT |
-| 16c | The manager phone keeps reading the Telegram bot while the APP is open on any screen (not only when the manager area is open and signed in) + a live line "Telegram: reading / problem" on the manager home | todo |
-| 16d | Worker first-message step: make the manager's reply easy to open (clipboard offer + share target checked), connection status line on the worker home | todo |
+| 16b | Auto-connect ON by default (only an explicit OFF by the main manager turns it off) | DONE in piece-16b-auto-connect-default.zip (no DB change, app 78 / 0.77.0; needs 16a; build result: check Actions) |
+| 16c | The phone that holds the bot reads Telegram the whole time the app is open + status line on the manager home | DONE in piece-16c-manager-reads-always.zip (no DB change, app 79 / 0.78.0; needs 16b; build result: check Actions) |
+| 16d | Worker first-message step: make the manager's reply easy to open (clipboard offer + share target checked), connection status line on the worker home | NEXT |
+| 16e | Chat-style support (bubbles, one thread per worker, manager and worker side) | todo (owner asked 2026-10-11) |
+| 16f | Quick replies (manager canned answers, worker quick questions) | todo (owner asked 2026-10-11) |
 
 ## What each piece contains
 1. **Foundation** — compiling project, fixed signing key, launcher icon from the approved logo, jewel theme, animated logo opening with gold light-sweep, Manager/Worker choice screen, different transition per button.
@@ -917,6 +919,15 @@ Zip: `piece-16a-connect-popup.zip` (sorts after `piece-15h2-help-in-support.zip`
 
 Next: 16b (auto-connect ON by default), then 16c (the manager phone reads Telegram while the app is open). Why the manager saw nothing: `TelegramRepository.pollLoop` is started in ONE place, `ui/ManagerScreens.kt` line 169, inside the manager area after sign-in, so anything a worker sent waited in Telegram until a manager opened the manager area (Telegram keeps updates about 24 h). Also `AutoConnect.enabled` reads `meta ac:on == "1"`, so with the default (never set) every new worker waited for a hand approval.
 
+## Piece 16b — auto-connect on by default (what exists now)
+Zip: `piece-16b-auto-connect-default.zip` (sorts after `piece-16a-connect-popup.zip`; no database change; app 78 / 0.77.0). Files: `data/AutoConnect.kt` (`enabled` is now `meta ac:on != "0"`), `app/build.gradle.kts`.
+- A phone where the switch was never touched now counts as ON, so a brand-new worker (not a known National ID, no problem with the code) is connected the moment the code reaches the bot and shows under "Not verified" until a manager presses VERIFY. A main manager who switched it OFF keeps OFF. Unchanged safety rules: workers already on the phone and any code with a problem still wait for a hand approval; payouts and referral points for an unverified worker stay blocked.
+- Owner question answered (2026-10-11): the bot token is NOT put in the worker app, encrypted or not. The app must hold the key to decrypt it, so anyone who opens the APK can get it (it only hides it from a casual look), and the token would let them read every worker's messages and send as the bot. Also Telegram lets only ONE reader take a bot's messages (`getUpdates`, error 409 for a second reader; a message is gone once read), so several worker phones reading the same bot would steal each other's messages and the manager's. The manager phone is the one reader (16c). The fully automatic channel to workers needs a small free relay service; not built, not asked for.
+
+## Piece 16c — manager phone reads always (what exists now)
+Zip: `piece-16c-manager-reads-always.zip` (sorts after 16b; no database change; app 79 / 0.78.0). Files: `ui/CTApp.kt` (app-level `LaunchedEffect` runs `repos.telegram.pollLoop`; the older reader in the manager area waits behind `loopLock`, harmless), `ui/TelegramStatus.kt` (`TgStatusLine`, shown under "Signed in as" on the manager home), `ui/ManagerScreens.kt`, `ui/TelegramScreens.kt` (texts), `ui/HelpGuide.kt` (sentence), `app/build.gradle.kts`.
+- A phone without a bot token (every worker phone) just idles in the loop (one small database read every 4 s). Messages are read while the app is open, also on the role screen and while the manager is not signed in; reading uses the actor `ManagerSession.actor` ("manager" until someone signs in).
+
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
 **T3c — DONE** (see "Piece T3c" below).
@@ -953,7 +964,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
 - `data/TaskGate.kt` — piece-13r5a1-task-status-data.zip
-- `app/build.gradle.kts` — piece-16a-connect-popup.zip
+- `app/build.gradle.kts` — piece-16c-manager-reads-always.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -989,7 +1000,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `data/Telegram.kt` — piece-15c3-auto-connect-data.zip
 - `data/AppUpdate.kt` — piece-14u1-app-update.zip
 - `data/Notify.kt` — piece-11e-2-move-phone.zip
-- `ui/TelegramScreens.kt` — piece-14u1-app-update.zip
+- `ui/TelegramScreens.kt` — piece-16c-manager-reads-always.zip
 - `ui/ShareInbox.kt` — piece-09b-2-worker-import.zip
 - `ui/WorkerIncoming.kt` — piece-09b-2-worker-import.zip
 - `ui/WorkerNotices.kt` — piece-09b-3-announcements.zip
@@ -997,10 +1008,10 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/Motion.kt` — piece-12b-3b-count-up-shimmer.zip
 - `ui/Polish.kt` — piece-12c-empty-states-success.zip
 - `ui/SupportManager.kt` — piece-15h2-help-in-support.zip
-- `ui/HelpGuide.kt` — piece-16a-connect-popup.zip
+- `ui/HelpGuide.kt` — piece-16c-manager-reads-always.zip
 - `ui/QuickConnect.kt` — piece-15c6-connect-always.zip
 - `ui/ConnectPopup.kt` — piece-16a-connect-popup.zip
-- `data/AutoConnect.kt` — piece-15c3-auto-connect-data.zip
+- `data/AutoConnect.kt` — piece-16b-auto-connect-default.zip
 - `ui/AutoConnectScreens.kt` — piece-15c4-auto-connect-screen.zip
 - `data/BotConfig.kt` — piece-15c2-bot-name.zip (superseded: `piece-15c2-bot-name.zip`)
 - `ui/LearnManager.kt` — piece-12c-empty-states-success.zip
@@ -1014,11 +1025,11 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `data/TeamWorker.kt` — piece-08t4-leaderboard.zip
 - `data/Util.kt` — piece-02-data.zip
 - `data/Verification.kt` — piece-06-screenshot-verification.zip
-- `ui/CTApp.kt` — piece-09b-2-worker-import.zip
+- `ui/CTApp.kt` — piece-16c-manager-reads-always.zip
 - `ui/Components.kt` — piece-12a-touch-feel.zip
 - `ui/Forms.kt` — piece-12a-touch-feel.zip
 - `ui/ManagerAccess.kt` — piece-05e-manager-access.zip
-- `ui/ManagerScreens.kt` — piece-15c4-auto-connect-screen.zip
+- `ui/ManagerScreens.kt` — piece-16c-manager-reads-always.zip
 - `ui/MenuDrawer.kt` — piece-12b-1-menu-manager.zip
 - `ui/NotifyScreens.kt` — piece-09d-3-notifications.zip
 - `ui/ManagerSyncScreens.kt` — piece-05e-manager-access.zip
@@ -1052,3 +1063,4 @@ Next: 11e (emergency migration to a new phone), then 12.
 
 ## Idea parked (owner, to confirm later)
 The CT mining pool may have a website with public stats. If it does, a later piece can read the daily mined amount from it (needs internet permission, which Piece 9A added). The manager would still confirm every figure. Pool bot messages on Telegram: bots cannot read other bots, so use share/paste or forwarding to our own bot (send 2–3 sample messages so a reader can be written).
+- `ui/TelegramStatus.kt` — piece-16c-manager-reads-always.zip
