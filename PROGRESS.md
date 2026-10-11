@@ -84,8 +84,8 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | R3b | Worker "Referrals & status" page in the three-bar menu: my code (COPY + SHARE text), status with progress to the next status, points balance, my referrals and their progress | DONE in piece-13r3b-referral-page.zip (no DB change, app 60 / 0.59.0; needs R3a; build result: check Actions) |
 | R4a | Points spending, data + messages (no screens): table `points_requests` (DB v15), worker request rules, manager decide / mark paid, W2M `POINTS_REQ`, M2W `POINTS_DECISION` | DONE in piece-13r4a-points-data.zip (DB v15, app 61 / 0.60.0; needs R3b; build result: check Actions) |
 | R4b | Points spending, worker screen: "Use my points" card (cash-out or gift, points, note, SEND REQUEST) and "My requests" with status, inside "Referrals & status" | DONE in piece-13r4b-points-worker.zip (no DB change, app 62 / 0.61.0; needs R4a; build result: check Actions) |
-| R4c | Points spending, manager screen: "Requests" tab in Referrals (real balance, approve with UGX / gift text, reject with reason, mark paid) + count badge | NEXT |
-| R4d | Points spending, money link: how an approved cash-out reaches the worker's payout (T3c extra payout or a note on the payout request), decided with the owner | todo |
+| R4c | Points spending, manager screen: "Requests" tab in Referrals (real balance, approve with UGX / gift text, reject with reason, mark paid / given) + count on the tab and the menu | DONE in piece-13r4c-points-manager.zip (no DB change, app 63 / 0.62.0; needs R4b; build result: check Actions) |
+| R4d | Points spending, money link: how an approved cash-out reaches the worker's payout (T3c extra payout or a note on the payout request), decided with the owner | NEXT |
 | R5 | Status perks: a task can ask for a minimum status (Builder, Leader, Champion); TASK message carries it; worker sees locked tasks with the reason | todo |
 
 ## What each piece contains
@@ -798,7 +798,12 @@ Zip: `piece-13r4b-points-worker.zip` (sorts after `piece-13r4a-points-data.zip`;
 - "My requests" (newest 10, cancelled ones hidden): OPEN and not yet in a report = "Not sent yet" + TAKE IT BACK (`cancel`); OPEN and sent = "Waiting for the manager's answer"; APPROVED = the UGX amount or the gift text, then "Waiting for the manager to pay it / give it" or "Paid / Given <time>", and the manager's note; REJECTED = the reason and "Your points were not used". It looks again every 4 s (figures, outbox keys `PTR:<uid>`).
 - Do not re-declare: `WorkerPointsUseCard`. Not compile-tested. If Actions fails, paste the error log.
 
-Next: R4c (manager screen). Read `ui/ReferralScreens.kt` (tabs Referrals / Points / Codes / Rules) and add a "Requests" tab: list `repos.pointsRequests.observeAll()` newest first with worker name, kind, points, the worker's REAL balance, note; APPROVE (cash-out shows UGX = points x rate and needs a tap to confirm; gift needs the gift text), REJECT (reason), MARK PAID / GIVEN; badge with `observeOpenCount()` on the tab and on the Referrals menu item. Main manager and other managers may both decide (audit shows who).
+## Piece R4c — manager "Requests" tab (what exists now)
+Zip: `piece-13r4c-points-manager.zip` (sorts after `piece-13r4b-points-worker.zip`; no database change; app 63 / 0.62.0; needs R4b). Files: `ui/ReferralRequests.kt` (new: `RfRequestsTab`), `ui/ReferralScreens.kt` (tab chip "Requests (n)" at the end of a now horizontally scrolling chip row, tab 4 calls `RfRequestsTab`), `ui/ManagerScreens.kt` (count of open requests on the "Referrals" menu item and on the menu dot; new parameter `pointsOpen` of the menu screen), `app/build.gradle.kts`.
+- Tab: explanation (approve takes the points and writes down the UGX or gift; it does not send money; the worker sees it with the next update; rate shown), then up to 30 requests, WAITING first. Each: worker name, Cash-out / Gift, points, time, the worker's words, the worker's REAL balance now (red when not enough), for a cash-out "If approved: UGX points x rate", for a gift a field "What the gift is", a note field (needed to reject; shown to the worker), APPROVE (two taps: "TAP AGAIN: TAKE N POINTS AND APPROVE"), REJECT. Approved: the amount or gift, the note, "Not paid yet" + MARK PAID / MARK GIVEN (two taps) or "Paid / Given <time>". Rejected: the reason. Every manager (not only the main one) can decide; the audit log names who.
+- Do not re-declare: `RfRequestsTab`. Not compile-tested. If Actions fails, paste the error log.
+
+Next: R4d (money link). Ask the owner ONE question first: when a cash-out is approved, should it (1) stay a separate thing the manager pays by hand (today's behaviour), (2) be added as a T3c "extra payout" gift so it shows in the worker's team figures, or (3) be added to the worker's next weekly payout request? Then build only that.
 
 ## Next: T4 (planned, decided with the owner)
 **T3b — DONE** (see "Piece T3b" below).
@@ -835,7 +840,7 @@ Files (zip: `piece-11d-backup-send.zip`; sorts after `piece-11c-restore.zip`): `
 Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
-- `app/build.gradle.kts` — piece-13r4b-points-worker.zip
+- `app/build.gradle.kts` — piece-13r4c-points-manager.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -851,7 +856,8 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `data/Learn.kt` — piece-10a-learn-manager.zip
 - `data/Referral.kt` — piece-13r1b-referral-rules.zip
 - `data/PointsRequests.kt` — piece-13r4a-points-data.zip
-- `ui/ReferralScreens.kt` — piece-13r1b-referral-rules.zip
+- `ui/ReferralScreens.kt` — piece-13r4c-points-manager.zip
+- `ui/ReferralRequests.kt` — piece-13r4c-points-manager.zip
 - `data/Entities.kt` — piece-08c-nc-claims.zip
 - `data/ManagerAccounts.kt` — piece-11a-main-login.zip
 - `data/ManagerSync.kt` — piece-05e-manager-access.zip
@@ -892,7 +898,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/Components.kt` — piece-12a-touch-feel.zip
 - `ui/Forms.kt` — piece-12a-touch-feel.zip
 - `ui/ManagerAccess.kt` — piece-05e-manager-access.zip
-- `ui/ManagerScreens.kt` — piece-13r1b-referral-rules.zip
+- `ui/ManagerScreens.kt` — piece-13r4c-points-manager.zip
 - `ui/MenuDrawer.kt` — piece-12b-1-menu-manager.zip
 - `ui/NotifyScreens.kt` — piece-09d-3-notifications.zip
 - `ui/ManagerSyncScreens.kt` — piece-05e-manager-access.zip
