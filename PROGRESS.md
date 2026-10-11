@@ -94,8 +94,9 @@ Full requirements are in `SPEC.md`. This file says what is built, how the repo w
 | H1 | In-app help, content + card: `HelpGuide` (about 24 short answers, worker and manager) and `HelpGuideCard` (search box, tap a question to open the answer). New file only, nothing stored | DONE in piece-15h1-help-guide.zip (no DB change, app 70 / 0.69.0; needs U1; build result: check Actions) |
 | C1 | One-tap connection, worker side: `BotConfig` (the manager's bot USERNAME, never the token), worker home card "Connect to the manager" (1 OPEN THE BOT, 2 SEND MY CONNECTION opens Telegram's send screen with the code filled in; hides after the manager's first message) | DONE in piece-15c1-quick-connect.zip (no DB change, app 72 / 0.71.0; needs H2; bot name set by piece-15c2-bot-name.zip; build result: check Actions) |
 | C1b | Bot name built in: `BOT_USERNAME = "CtcommBot"` (one file, `data/BotConfig.kt`, no app version change) | DONE in piece-15c2-bot-name.zip (needs C1; build result: check Actions) |
-| C2 | Auto-connect (main manager switch, OFF by default): the manager phone approves a valid new worker by itself, worker shows as UNVERIFIED, payouts blocked until the manager verifies | NEXT |
-| C3 | Simpler worker connect screens + help text updated to the new flow | todo |
+| C2a | Auto-connect, data + rules (no screen): `AutoConnect` (switch `ac:on`, list `ac:unv`), Telegram enrollment auto-approved for a NEW worker with no problem, chat bound, first update sent; payout confirmation and referral award refused while a worker is unverified | DONE in piece-15c3-auto-connect-data.zip (no DB change, app 73 / 0.72.0; needs C1b; build result: check Actions) |
+| C2b | Auto-connect screen: menu > Auto-connect (ON / OFF for the main manager, list "Not verified" with VERIFY for every manager) | DONE in piece-15c4-auto-connect-screen.zip (no DB change, app 74 / 0.73.0; needs C2a; build result: check Actions) |
+| C3 | Simpler worker connect screens (old Connect card shortened) + help text and web guide updated to the new flow | NEXT |
 | H2 | In-app help shown in Support: worker menu > Support has the card above the chat; manager Support list has it under the chats | DONE in piece-15h2-help-in-support.zip (no DB change, app 71 / 0.70.0; needs H1; build result: check Actions) |
 
 ## What each piece contains
@@ -815,6 +816,16 @@ Zip: `piece-13r4c-points-manager.zip` (sorts after `piece-13r4b-points-worker.zi
 
 R5a-1, R5a-2, R5b and R5c are done. Piece R5 is complete.
 
+## Pieces C2a + C2b — auto-connect (what exists now)
+
+Zips: `piece-15c3-auto-connect-data.zip` (app 73 / 0.72.0) then `piece-15c4-auto-connect-screen.zip` (app 74 / 0.73.0). No DB change.
+- Owner request: workers connect with taps only, no key-code call. Safety kept: auto-connected workers are UNVERIFIED; the owner (main manager) switches the feature on, OFF by default.
+- C2a `data/AutoConnect.kt`: `enabled`, `setEnabled(…, byMain, actor)` (main only, audited), `unverifiedIds`, `isUnverified`, `markUnverified`, `verify` (any manager, audited). Stored in `meta`: `ac:on`, `ac:unv` (comma-separated worker ids).
+- `data/Telegram.kt` `record(...)`: an ENROLL with no problem and `mode == "NEW"` is accepted by `sync.acceptEnrollment`, marked unverified, the chat is bound, an entry "Connected automatically" is logged and `sendUpdate(workerId, everything = true)` is tried. LINK / ATTACH / ALREADY / any problem still go to the inbox for a manual approval (that is how someone could take over a real worker's place). Pasting in Sync still shows the normal approval card.
+- Enforcement: `PayoutRepository.confirmPaid` and `ReferralRepository.award` return `AutoConnect.BLOCK_TEXT` while the worker (or the referrer) is unverified. Points cash-out requests are not blocked separately (they need awarded points first).
+- C2b `ui/AutoConnectScreens.kt`: `ManagerAutoConnectScreen(repos, actor, isMain, onBack)`; `ui/ManagerScreens.kt`: `MgrRoute.AutoConnect`, menu item "Auto-connect" in Connections, new parameter `onAutoConnect` on the dashboard composable.
+- Next: C3 shortens the old Connect card, updates the in-app help (`HelpGuide.kt`) and the public guide to the new flow.
+
 ## Piece C1 — one-tap connection, worker side (what exists now)
 
 Zip: `piece-15c1-quick-connect.zip` (sorts after `piece-15h2-help-in-support.zip`; app 72 / 0.71.0; no DB change). Files: `data/BotConfig.kt` (NEW), `ui/QuickConnect.kt` (NEW), `data/Sync.kt` (+ `managerMessagesReceived`), `ui/WorkerScreens.kt` (card first in `top`), `app/build.gradle.kts`.
@@ -927,7 +938,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 
 ## FILE OWNERS (latest zip that holds each file; to change a file, read its owner zip; upload this list's zips for the files you touch + their callers)
 - `data/TaskGate.kt` — piece-13r5a1-task-status-data.zip
-- `app/build.gradle.kts` — piece-15c1-quick-connect.zip
+- `app/build.gradle.kts` — piece-15c4-auto-connect-screen.zip
 - `data/Backup.kt` — piece-11d-backup-send.zip
 - `ui/BackupScreens.kt` — piece-11e-2-move-phone.zip
 - `data/Migrate.kt` — piece-11e-2-move-phone.zip
@@ -941,7 +952,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `data/CTDatabase.kt` — piece-13r5a1-task-status-data.zip
 - `data/Daos.kt` — piece-10a-learn-manager.zip
 - `data/Learn.kt` — piece-10a-learn-manager.zip
-- `data/Referral.kt` — piece-13r1b-referral-rules.zip
+- `data/Referral.kt` — piece-15c3-auto-connect-data.zip
 - `data/PointsRequests.kt` — piece-13r4d-points-money.zip
 - `ui/ReferralScreens.kt` — piece-13r4d-points-money.zip
 - `ui/ReferralRequests.kt` — piece-13r4d-points-money.zip
@@ -954,13 +965,13 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `data/PayoutMatching.kt` — piece-07-payouts.zip
 - `data/PdfText.kt` — piece-08a-pdf-reader.zip
 - `data/ProofAnalyzer.kt` — piece-06-screenshot-verification.zip
-- `data/Repositories.kt` — piece-13r5a1-task-status-data.zip
+- `data/Repositories.kt` — piece-15c3-auto-connect-data.zip
 - `data/ScreenshotChecks.kt` — piece-06-screenshot-verification.zip
 - `data/Security.kt` — piece-04c2-worker-proof.zip
 - `data/ServiceLocator.kt` — piece-13r4a-points-data.zip
 - `data/Sync.kt` — piece-15c1-quick-connect.zip
 - `data/ReferralView.kt` — piece-13r3a-referral-view-data.zip
-- `data/Telegram.kt` — piece-14u1-app-update.zip
+- `data/Telegram.kt` — piece-15c3-auto-connect-data.zip
 - `data/AppUpdate.kt` — piece-14u1-app-update.zip
 - `data/Notify.kt` — piece-11e-2-move-phone.zip
 - `ui/TelegramScreens.kt` — piece-14u1-app-update.zip
@@ -973,6 +984,8 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/SupportManager.kt` — piece-15h2-help-in-support.zip
 - `ui/HelpGuide.kt` — piece-15h1-help-guide.zip
 - `ui/QuickConnect.kt` — piece-15c1-quick-connect.zip
+- `data/AutoConnect.kt` — piece-15c3-auto-connect-data.zip
+- `ui/AutoConnectScreens.kt` — piece-15c4-auto-connect-screen.zip
 - `data/BotConfig.kt` — piece-15c2-bot-name.zip (superseded: `piece-15c2-bot-name.zip`)
 - `ui/LearnManager.kt` — piece-12c-empty-states-success.zip
 - `ui/Support.kt` — piece-09d-2a-support-worker.zip
@@ -989,7 +1002,7 @@ Next: 11e (emergency migration to a new phone), then 12.
 - `ui/Components.kt` — piece-12a-touch-feel.zip
 - `ui/Forms.kt` — piece-12a-touch-feel.zip
 - `ui/ManagerAccess.kt` — piece-05e-manager-access.zip
-- `ui/ManagerScreens.kt` — piece-13r5b-task-status-manager.zip
+- `ui/ManagerScreens.kt` — piece-15c4-auto-connect-screen.zip
 - `ui/MenuDrawer.kt` — piece-12b-1-menu-manager.zip
 - `ui/NotifyScreens.kt` — piece-09d-3-notifications.zip
 - `ui/ManagerSyncScreens.kt` — piece-05e-manager-access.zip
